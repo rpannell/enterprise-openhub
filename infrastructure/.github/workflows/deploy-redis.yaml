@@ -15,6 +15,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Detect act
+        id: detect_act
+        run: |
+          if [ "$ACT" = "true" ]; then
+            echo "running_under_act=true" >> $GITHUB_ENV
+          else
+            echo "running_under_act=false" >> $GITHUB_ENV
+          fi
+
       - name: Validate redis_password
         run: |
           if [ -z "${{ github.event.inputs.redis_password }}" ]; then
@@ -23,21 +33,28 @@ jobs:
           fi
 
       - name: Install Helm
+        if: env.running_under_act == 'false'
         run: |
           curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
       - name: Install kubectl
         run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          mv kubectl /usr/local/bin/
+          if ! command -v kubectl &> /dev/null; then
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl
+            mv kubectl /usr/local/bin/
+          else
+            echo "kubectl already installed"
+          fi
 
       - name: Ensure redis namespace exists
+        if: env.running_under_act == 'false'
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl get namespace redis || kubectl create namespace redis
 
       - name: Create Redis password secret
+        if: env.running_under_act == 'false'
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl delete secret redis-password -n redis --ignore-not-found
@@ -45,32 +62,37 @@ jobs:
             --from-literal=password="${{ github.event.inputs.redis_password }}" \
             -n redis
 
-      - name: Ensure Redis headless service exists
+      - if: env.running_under_act == 'false'
+        name: Ensure Redis headless service exists
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl apply -f k8s/redis/redis-service.yaml
 
 
-      - name: Apply Redis Cluster manifests
+      - if: env.running_under_act == 'false'
+        name: Apply Redis Cluster manifests
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl apply -f ${{ github.workspace }}/k8s/redis/redis-cluster.yaml
 
-      - name: Wait for Redis pods to be ready
+      - if: env.running_under_act == 'false'
+        name: Wait for Redis pods to be ready
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl wait --for=condition=ready pod -l app=redis-cluster -n redis --timeout=300s
 
 
 
-      - name: Initialize Redis Cluster
+      - if: env.running_under_act == 'false'
+        name: Initialize Redis Cluster
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl delete job redis-cluster-init -n redis --ignore-not-found
           kubectl apply -f ${{ github.workspace }}/k8s/redis/redis-cluster-init.yaml
           kubectl wait --for=condition=complete job/redis-cluster-init -n redis --timeout=120s
 
-      - name: Deploy RedisInsight
+      - if: env.running_under_act == 'false'
+        name: Deploy RedisInsight
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl apply -f ${{ github.workspace }}/k8s/redis/redis-insights.yaml

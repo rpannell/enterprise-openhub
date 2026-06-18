@@ -1,7 +1,12 @@
 name: Deploy PostgreSQL
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      admin_password:
+        description: "PostgreSQL admin password"
+        required: true
+        type: string
 
 jobs:
   deploy-postgres:
@@ -21,6 +26,13 @@ jobs:
             echo "running_under_act=false" >> $GITHUB_ENV
           fi
 
+      - name: Validate admin_password
+        run: |
+          if [ -z "${{ github.event.inputs.admin_password }}" ]; then
+            echo "ERROR: admin_password is required"
+            exit 1
+          fi
+
       - name: Install kubectl
         if: env.running_under_act == 'false'
         run: |
@@ -29,29 +41,56 @@ jobs:
           sudo mv kubectl /usr/local/bin/kubectl
 
       - name: Create postgres namespace
+        if: env.running_under_act == 'false'
         run: |
           kubectl apply -f k8s/postgres/namespace.yaml
 
       - name: Create postgres secret
+        if: env.running_under_act == 'false'
         run: |
-          kubectl apply -f k8s/postgres/secret.yaml
+          kubectl create namespace postgres --dry-run=client -o yaml | kubectl apply -f -
+          kubectl delete secret postgres-admin-secret -n postgres --ignore-not-found || true
+          kubectl create secret generic postgres-admin-secret \
+            --from-literal=password="${{ github.event.inputs.admin_password }}" \
+            -n postgres
 
       - name: Deploy PostgreSQL StatefulSet
+        if: env.running_under_act == 'false'
         run: |
           kubectl apply -f k8s/postgres/statefulset.yaml
 
       - name: Deploy PostgreSQL Services
+        if: env.running_under_act == 'false'
         run: |
           kubectl apply -f k8s/postgres/service.yaml
 
+      - name: Deploy PgAdmin Secret
+        if: env.running_under_act == 'false'
+        run: |
+          kubectl apply -f k8s/postgres/pgadmin-secret.yaml
+
+      - name: Deploy PgAdmin
+        if: env.running_under_act == 'false'
+        run: |
+          kubectl apply -f k8s/postgres/pgadmin.yaml
+
       - name: Wait for PostgreSQL pod to be ready
+        if: env.running_under_act == 'false'
         run: |
           kubectl wait --for=condition=ready pod -l app=postgres -n postgres --timeout=300s
 
       - name: Verify PostgreSQL connectivity
+        if: env.running_under_act == 'false'
         run: |
           kubectl run -it --rm debug --image=postgres:16-alpine --restart=Never -n postgres -- \
             pg_isready -h postgres-lb.postgres.svc.cluster.local -U postgres || true
 
       - name: PostgreSQL deployment complete
-        run: echo "PostgreSQL deployed and ready. Kong can now connect to postgres-lb.postgres.svc.cluster.local:5432"
+        if: env.running_under_act == 'false'
+        run: |
+          echo "PostgreSQL deployed and ready. Kong can now connect to postgres-lb.postgres.svc.cluster.local:5432"
+          echo ""
+          echo "PgAdmin is available at:"
+          echo "  Ingress: http://pgadmin.local (add to hosts file)"
+          echo "  Port-forward: kubectl port-forward -n postgres svc/pgadmin 8888:80"
+          echo "  Login: admin@example.com / pgadmin123"
