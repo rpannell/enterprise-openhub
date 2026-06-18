@@ -19,3 +19,7 @@ data:
     cluster_addr = "http://vault-0.vault-internal.vault.svc.cluster.local:8201"
 
     disable_mlock = true
+
+    # Note: For Kong path rewriting to /vault, use Kong proxy-rewrite plugin
+    # to strip /vault prefix from incoming requests
+    # Example Kong route: /vault -> http://vault.vault.svc.cluster.local:8200

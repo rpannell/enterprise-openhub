@@ -42,6 +42,8 @@ spec:
               export RABBITMQ_DEFAULT_USER="$(cat /vault/secrets/admin_user)"
               export RABBITMQ_DEFAULT_PASS="$(cat /vault/secrets/admin_password)"
               export RABBITMQ_ERLANG_COOKIE="$(cat /vault/secrets/erlang_cookie)"
+              export RABBITMQ_MANAGEMENT_TCP_PORT=15672
+              export RABBITMQ_MANAGEMENT_HTTP_PATH_PREFIX=/rabbitmq
 
               rabbitmq-server
           ports:
