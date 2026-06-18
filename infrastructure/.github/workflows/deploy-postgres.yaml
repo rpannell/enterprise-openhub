@@ -1,0 +1,57 @@
+name: Deploy PostgreSQL
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  deploy-postgres:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Detect if running under act
+      - name: Detect act
+        id: detect_act
+        run: |
+          if [ "$ACT" = "true" ]; then
+            echo "running_under_act=true" >> $GITHUB_ENV
+          else
+            echo "running_under_act=false" >> $GITHUB_ENV
+          fi
+
+      - name: Install kubectl
+        if: env.running_under_act == 'false'
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Create postgres namespace
+        run: |
+          kubectl apply -f k8s/postgres/namespace.yaml
+
+      - name: Create postgres secret
+        run: |
+          kubectl apply -f k8s/postgres/secret.yaml
+
+      - name: Deploy PostgreSQL StatefulSet
+        run: |
+          kubectl apply -f k8s/postgres/statefulset.yaml
+
+      - name: Deploy PostgreSQL Services
+        run: |
+          kubectl apply -f k8s/postgres/service.yaml
+
+      - name: Wait for PostgreSQL pod to be ready
+        run: |
+          kubectl wait --for=condition=ready pod -l app=postgres -n postgres --timeout=300s
+
+      - name: Verify PostgreSQL connectivity
+        run: |
+          kubectl run -it --rm debug --image=postgres:16-alpine --restart=Never -n postgres -- \
+            pg_isready -h postgres-lb.postgres.svc.cluster.local -U postgres || true
+
+      - name: PostgreSQL deployment complete
+        run: echo "PostgreSQL deployed and ready. Kong can now connect to postgres-lb.postgres.svc.cluster.local:5432"
