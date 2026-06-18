@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: rabbitmq
+spec:
+  serviceName: rabbitmq
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "rabbitmq"
+        vault.hashicorp.com/agent-inject-secret-admin_user: "rabbitmq/config"
+        vault.hashicorp.com/agent-inject-secret-admin_password: "rabbitmq/config"
+        vault.hashicorp.com/agent-inject-secret-erlang_cookie: "rabbitmq/config"
+        vault.hashicorp.com/agent-inject-template-admin_user: |
+          {{- with secret "rabbitmq/config" -}}
+          {{ .Data.data.admin_user }}
+          {{- end }}
+        vault.hashicorp.com/agent-inject-template-admin_password: |
+          {{- with secret "rabbitmq/config" -}}
+          {{ .Data.data.admin_password }}
+          {{- end }}
+        vault.hashicorp.com/agent-inject-template-erlang_cookie: |
+          {{- with secret "rabbitmq/config" -}}
+          {{ .Data.data.erlang_cookie }}
+          {{- end }}
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3.13-management
+          command:
+            - "bash"
+            - "-c"
+            - |
+              export RABBITMQ_DEFAULT_USER="$(cat /vault/secrets/admin_user)"
+              export RABBITMQ_DEFAULT_PASS="$(cat /vault/secrets/admin_password)"
+              export RABBITMQ_ERLANG_COOKIE="$(cat /vault/secrets/erlang_cookie)"
+
+              rabbitmq-server
+          ports:
+            - containerPort: 5672
+              name: amqp
+            - containerPort: 15672
+              name: management
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+      volumeClaimTemplates:
+        - metadata:
+            name: data
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi

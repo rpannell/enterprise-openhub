@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-cluster-init
+  namespace: redis
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      dnsPolicy: ClusterFirst
+      containers:
+        - name: redis-cluster-init
+          image: redis:7.2
+          command:
+            - "bash"
+            - "-c"
+            - |
+              echo "Waiting for Redis pods..."
+              for i in {1..60}; do
+                if getent hosts redis-cluster-0.redis-cluster.redis.svc.cluster.local; then
+                  echo "DNS ready"
+                  break
+                fi
+                sleep 5
+              done
+
+              redis-cli --cluster create \
+                redis-cluster-0.redis-cluster.redis.svc.cluster.local:6379 \
+                redis-cluster-1.redis-cluster.redis.svc.cluster.local:6379 \
+                redis-cluster-2.redis-cluster.redis.svc.cluster.local:6379 \
+                redis-cluster-3.redis-cluster.redis.svc.cluster.local:6379 \
+                redis-cluster-4.redis-cluster.redis.svc.cluster.local:6379 \
+                redis-cluster-5.redis-cluster.redis.svc.cluster.local:6379 \
+                --cluster-replicas 1 \
+                -a $REDIS_PASSWORD \
+                --cluster-yes
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-password
+                  key: password
