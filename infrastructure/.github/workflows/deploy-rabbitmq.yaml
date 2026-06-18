@@ -1,0 +1,62 @@
+name: Deploy RabbitMQ with Vault Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      rabbitmq_admin_password:
+        description: "RabbitMQ admin password"
+        required: true
+        type: string
+
+jobs:
+  deploy-rabbitmq:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+
+      - name: Install Vault CLI
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt-get update && sudo apt-get install vault -y
+
+      - name: Authenticate to Vault
+        run: |
+          export VAULT_ADDR="${{ secrets.VAULT_ADDR }}"
+          vault login ${{ secrets.VAULT_TOKEN }}
+
+      - name: Setup RabbitMQ secrets in Vault
+        env:
+          RABBITMQ_ADMIN_PASSWORD: ${{ github.event.inputs.rabbitmq_admin_password }}
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+        run: |
+          chmod +x scripts/setup-rabbitmq-vault.sh
+          ./scripts/setup-rabbitmq-vault.sh
+
+      - name: Apply RabbitMQ manifests
+        run: |
+          kubectl apply -f k8s/rabbitmq-namespace.yaml
+          kubectl apply -f k8s/rabbitmq-service.yaml
+          kubectl apply -f k8s/rabbitmq-statefulset.yaml
+
+      - name: Wait for RabbitMQ pods to be ready
+        run: |
+          kubectl wait --for=condition=ready pod -l app=rabbitmq -n rabbitmq --timeout=300s
+
+      - name: Deployment complete
+        run: echo "RabbitMQ with Vault integration deployed successfully."

@@ -1,0 +1,31 @@
+name: Deploy Vault and Consul
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  deploy-vault-consul:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          mv kubectl /usr/local/bin/kubectl
+
+      - name: Apply Vault manifests
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f k8s/vault/namespace.yaml
+          kubectl apply -f k8s/vault/config.yaml
+          kubectl apply -f k8s/vault/service.yaml
+          kubectl apply -f k8s/vault/internal-service.yaml
+          kubectl apply -f k8s/vault/statefulset.yaml
+          kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s
+
+      - name: Vault & Consul deployment complete
+        run: echo "Vault (Raft) and Consul cluster deployed."

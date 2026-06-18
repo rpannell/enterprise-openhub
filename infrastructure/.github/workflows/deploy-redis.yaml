@@ -1,0 +1,77 @@
+name: Deploy Redis Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      redis_password:
+        description: "Redis Cluster password"
+        required: true
+        type: string
+
+jobs:
+  deploy-redis-stack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Validate redis_password
+        run: |
+          if [ -z "${{ github.event.inputs.redis_password }}" ]; then
+            echo "ERROR: redis_password is required"
+            exit 1
+          fi
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          mv kubectl /usr/local/bin/
+
+      - name: Ensure redis namespace exists
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl get namespace redis || kubectl create namespace redis
+
+      - name: Create Redis password secret
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl delete secret redis-password -n redis --ignore-not-found
+          kubectl create secret generic redis-password \
+            --from-literal=password="${{ github.event.inputs.redis_password }}" \
+            -n redis
+
+      - name: Ensure Redis headless service exists
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f k8s/redis-service.yaml
+
+
+      - name: Apply Redis Cluster manifests
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f ${{ github.workspace }}/k8s/redis-cluster.yaml
+
+      - name: Wait for Redis pods to be ready
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl wait --for=condition=ready pod -l app=redis-cluster -n redis --timeout=300s
+
+
+
+      - name: Initialize Redis Cluster
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl delete job redis-cluster-init -n redis --ignore-not-found
+          kubectl apply -f ${{ github.workspace }}/k8s/redis-cluster-init.yaml
+          kubectl wait --for=condition=complete job/redis-cluster-init -n redis --timeout=120s
+
+      - name: Deploy RedisInsight
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f ${{ github.workspace }}/k8s/redis-insights.yaml
+
