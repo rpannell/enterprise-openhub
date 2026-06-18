@@ -1,0 +1,2 @@
+# ConfigMap removed - PostgreSQL will be initialized by Kong migrations
+# Kong deployment will create its own database and schema as needed

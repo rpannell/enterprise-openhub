@@ -1,0 +1,82 @@
+name: Deploy Kong API Gateway
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  deploy-kong:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Detect if running under act
+      - name: Detect act
+        id: detect_act
+        run: |
+          if [ "$ACT" = "true" ]; then
+            echo "running_under_act=true" >> $GITHUB_ENV
+          else
+            echo "running_under_act=false" >> $GITHUB_ENV
+          fi
+
+      - name: Install kubectl
+        if: env.running_under_act == 'false'
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Verify PostgreSQL is running
+        run: |
+          kubectl get pods -n postgres -l app=postgres || echo "Warning: PostgreSQL namespace not found. Ensure PostgreSQL is deployed first."
+
+      - name: Create kong namespace
+        run: |
+          kubectl apply -f k8s/kong/namespace.yaml
+
+      - name: Create kong secrets
+        run: |
+          kubectl apply -f k8s/kong/secret.yaml
+
+      - name: Create kong configmap
+        run: |
+          kubectl apply -f k8s/kong/configmap.yaml
+
+      - name: Deploy Kong
+        run: |
+          kubectl apply -f k8s/kong/deployment.yaml
+
+      - name: Deploy Kong Services
+        run: |
+          kubectl apply -f k8s/kong/service.yaml
+
+      - name: Wait for Kong pods to be ready
+        run: |
+          kubectl wait --for=condition=ready pod -l app=kong -n kong --timeout=300s
+
+      - name: Deploy Kong Ingress routes
+        run: |
+          kubectl apply -f k8s/kong/ingress.yaml
+
+      - name: Verify Kong Ingress
+        run: |
+          kubectl get ingress -n kong
+          kubectl get ingress -n redis
+          kubectl get ingress -n consul
+          kubectl get ingress -n vault
+
+      - name: Display Kong access information
+        run: |
+          echo "Kong API Gateway deployed successfully!"
+          echo "Kong Proxy Service: kong-proxy.kong.svc.cluster.local:80"
+          echo "Kong Admin Service: kong-admin.kong.svc.cluster.local:8001"
+          echo ""
+          echo "Configure your /etc/hosts with:"
+          echo "127.0.0.1 redis.local consul.local vault.local"
+          echo ""
+          echo "Then access the UIs at:"
+          echo "- RedisInsight: http://redis.local"
+          echo "- Consul UI: http://consul.local"
+          echo "- Vault UI: http://vault.local"
