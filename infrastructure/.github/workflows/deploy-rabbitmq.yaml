@@ -13,50 +13,89 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v3
 
+      # Detect if running under act
+      - name: Detect act
+        id: detect_act
+        run: |
+          if [ "$ACT" = "true" ]; then
+            echo "running_under_act=true" >> $GITHUB_ENV
+          else
+            echo "running_under_act=false" >> $GITHUB_ENV
+          fi
+
       - name: Install kubectl
+        if: env.running_under_act == 'false'
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
       - name: Configure kubeconfig
+        if: env.running_under_act == 'false'
         run: |
           mkdir -p ~/.kube
           echo "$KUBECONFIG_CONTENT" > ~/.kube/config
         env:
           KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
 
-      - name: Install Vault CLI
+      - name: Install Vault CLI and jq
         run: |
-          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-          sudo apt-get update && sudo apt-get install vault -y
+          sudo apt-get update
+          sudo apt-get install -y jq curl gpg
 
-      - name: Authenticate to Vault
+          # Add HashiCorp GPG key
+          curl -fsSL https://apt.releases.hashicorp.com/gpg \
+            | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp.gpg
+
+          # Add HashiCorp repo (non-interactive)
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com noble main" \
+            | sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+          sudo apt-get update
+          sudo apt-get install -y vault
+
+      - name: Vault AppRole login
+        if: env.running_under_act == 'false'
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_RABBITMQ_ROLE_ID: ${{ secrets.VAULT_RABBITMQ_ROLE_ID }}
+          VAULT_RABBITMQ_SECRET_ID: ${{ secrets.VAULT_RABBITMQ_SECRET_ID }}
         run: |
-          export VAULT_ADDR="${{ secrets.VAULT_ADDR }}"
-          vault login ${{ secrets.VAULT_TOKEN }}
+          export VAULT_ADDR
+          TOKEN=$(vault write -field=token auth/approle/login \
+            role_id="$VAULT_RABBITMQ_ROLE_ID" \
+            secret_id="$VAULT_RABBITMQ_SECRET_ID")
+          echo "VAULT_TOKEN=$TOKEN" >> $GITHUB_ENV
 
       - name: Setup RabbitMQ secrets in Vault
+        if: env.running_under_act == 'false'
         env:
-          RABBITMQ_ADMIN_PASSWORD: ${{ github.event.inputs.rabbitmq_admin_password }}
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
+          RABBITMQ_ADMIN_PASSWORD: ${{ github.event.inputs.rabbitmq_admin_password }}
         run: |
+          export VAULT_ADDR
+          export VAULT_TOKEN
+          vault login "$VAULT_TOKEN"
+
           chmod +x scripts/setup-rabbitmq-vault.sh
           ./scripts/setup-rabbitmq-vault.sh
 
       - name: Apply RabbitMQ manifests
+        if: env.running_under_act == 'false'
         run: |
-          kubectl apply -f k8s/rabbitmq-namespace.yaml
-          kubectl apply -f k8s/rabbitmq-service.yaml
-          kubectl apply -f k8s/rabbitmq-statefulset.yaml
+          kubectl apply --validate=false -f k8s/rabbitmq/namespace.yaml
+          kubectl apply --validate=false -f k8s/rabbitmq/service.yaml
+          kubectl apply --validate=false -f k8s/rabbitmq/statefulset.yaml
+          kubectl apply --validate=false -f k8s/rabbitmq/ingress.yaml
 
       - name: Wait for RabbitMQ pods to be ready
+        if: env.running_under_act == 'false'
         run: |
           kubectl wait --for=condition=ready pod -l app=rabbitmq -n rabbitmq --timeout=300s
 
-      - name: Deployment complete
-        run: echo "RabbitMQ with Vault integration deployed successfully."
+      - name: RabbitMQ deployment complete
+        run: echo "RabbitMQ with Vault integration deployed."

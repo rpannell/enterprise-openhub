@@ -48,13 +48,13 @@ jobs:
       - name: Ensure Redis headless service exists
         run: |
           export KUBECONFIG=/root/.kube/config
-          kubectl apply -f k8s/redis-service.yaml
+          kubectl apply -f k8s/redis/redis-service.yaml
 
 
       - name: Apply Redis Cluster manifests
         run: |
           export KUBECONFIG=/root/.kube/config
-          kubectl apply -f ${{ github.workspace }}/k8s/redis-cluster.yaml
+          kubectl apply -f ${{ github.workspace }}/k8s/redis/redis-cluster.yaml
 
       - name: Wait for Redis pods to be ready
         run: |
@@ -67,11 +67,11 @@ jobs:
         run: |
           export KUBECONFIG=/root/.kube/config
           kubectl delete job redis-cluster-init -n redis --ignore-not-found
-          kubectl apply -f ${{ github.workspace }}/k8s/redis-cluster-init.yaml
+          kubectl apply -f ${{ github.workspace }}/k8s/redis/redis-cluster-init.yaml
           kubectl wait --for=condition=complete job/redis-cluster-init -n redis --timeout=120s
 
       - name: Deploy RedisInsight
         run: |
           export KUBECONFIG=/root/.kube/config
-          kubectl apply -f ${{ github.workspace }}/k8s/redis-insights.yaml
+          kubectl apply -f ${{ github.workspace }}/k8s/redis/redis-insights.yaml
 
