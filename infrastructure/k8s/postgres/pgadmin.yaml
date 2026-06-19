@@ -41,18 +41,18 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /misc/ping
-            port: 80
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /misc/ping
-            port: 80
-          initialDelaySeconds: 10
-          periodSeconds: 5
+        # livenessProbe:
+        #   httpGet:
+        #     path: /misc/ping
+        #     port: 80
+        #   initialDelaySeconds: 30
+        #   periodSeconds: 10
+        # readinessProbe:
+        #   httpGet:
+        #     path: /misc/ping
+        #     port: 80
+        #   initialDelaySeconds: 10
+        #   periodSeconds: 5
       volumes:
       - name: pgadmin-data
         emptyDir: {}

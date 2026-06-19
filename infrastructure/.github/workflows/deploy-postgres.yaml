@@ -16,15 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Detect if running under act
-      - name: Detect act
-        id: detect_act
-        run: |
-          if [ "$ACT" = "true" ]; then
-            echo "running_under_act=true" >> $GITHUB_ENV
-          else
-            echo "running_under_act=false" >> $GITHUB_ENV
-          fi
+      # (Removed act detection logic)
 
       - name: Validate admin_password
         run: |
@@ -34,59 +26,57 @@ jobs:
           fi
 
       - name: Install kubectl
-        if: env.running_under_act == 'false'
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
-      - name: Create postgres namespace
-        if: env.running_under_act == 'false'
+      - name: Load local kubeconfig (for local act testing)
         run: |
-          kubectl apply -f k8s/postgres/namespace.yaml
+          mkdir -p $HOME/.kube
+          cp kubeconfig-act $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
+
+      - name: Create postgres namespace
+        run: |
+          kubectl apply --validate=false -f k8s/postgres/namespace.yaml
 
       - name: Create postgres secret
-        if: env.running_under_act == 'false'
         run: |
-          kubectl create namespace postgres --dry-run=client -o yaml | kubectl apply -f -
-          kubectl delete secret postgres-admin-secret -n postgres --ignore-not-found || true
-          kubectl create secret generic postgres-admin-secret \
-            --from-literal=password="${{ github.event.inputs.admin_password }}" \
+          kubectl create namespace postgres --dry-run=client -o yaml | kubectl apply --validate=false -f -
+          kubectl delete secret postgres-credentials -n postgres --ignore-not-found || true
+          kubectl create secret generic postgres-credentials \
+            --from-literal=POSTGRES_USER=postgres \
+            --from-literal=POSTGRES_PASSWORD="${{ github.event.inputs.admin_password }}" \
             -n postgres
 
       - name: Deploy PostgreSQL StatefulSet
-        if: env.running_under_act == 'false'
         run: |
-          kubectl apply -f k8s/postgres/statefulset.yaml
+          kubectl apply --validate=false -f k8s/postgres/statefulset.yaml
 
       - name: Deploy PostgreSQL Services
-        if: env.running_under_act == 'false'
         run: |
-          kubectl apply -f k8s/postgres/service.yaml
-
-      - name: Deploy PgAdmin Secret
-        if: env.running_under_act == 'false'
-        run: |
-          kubectl apply -f k8s/postgres/pgadmin-secret.yaml
-
-      - name: Deploy PgAdmin
-        if: env.running_under_act == 'false'
-        run: |
-          kubectl apply -f k8s/postgres/pgadmin.yaml
+          kubectl apply --validate=false -f k8s/postgres/service.yaml
 
       - name: Wait for PostgreSQL pod to be ready
-        if: env.running_under_act == 'false'
         run: |
           kubectl wait --for=condition=ready pod -l app=postgres -n postgres --timeout=300s
 
+      - name: Deploy PgAdmin Secret
+        run: |
+          kubectl apply --validate=false -f k8s/postgres/pgadmin-secret.yaml
+
+      - name: Deploy PgAdmin
+        run: |
+          kubectl apply --validate=false -f k8s/postgres/pgadmin.yaml
+
       - name: Verify PostgreSQL connectivity
-        if: env.running_under_act == 'false'
         run: |
           kubectl run -it --rm debug --image=postgres:16-alpine --restart=Never -n postgres -- \
             pg_isready -h postgres-lb.postgres.svc.cluster.local -U postgres || true
 
       - name: PostgreSQL deployment complete
-        if: env.running_under_act == 'false'
         run: |
           echo "PostgreSQL deployed and ready. Kong can now connect to postgres-lb.postgres.svc.cluster.local:5432"
           echo ""
@@ -94,3 +84,5 @@ jobs:
           echo "  Ingress: http://pgadmin.local (add to hosts file)"
           echo "  Port-forward: kubectl port-forward -n postgres svc/pgadmin 8888:80"
           echo "  Login: admin@example.com / pgadmin123"
+
+

@@ -4,9 +4,8 @@ metadata:
   name: vault
   namespace: vault
 spec:
+  ports:
+    - port: 8200
+      name: api
   selector:
     app: vault
-  ports:
-    - name: api
-      port: 8200
-      targetPort: 8200

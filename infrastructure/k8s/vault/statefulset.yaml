@@ -14,20 +14,29 @@ spec:
       labels:
         app: vault
     spec:
+      serviceAccountName: default
       containers:
         - name: vault
-          image: hashicorp/vault:1.15.2
+          image: hashicorp/vault:1.15.0
+          command: ["vault"]
           args:
             - "server"
             - "-config=/vault/config/vault.hcl"
           env:
-            - name: VAULT_LOCAL_CONFIG
-              value: ""
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: SKIP_CHOWN
+              value: "true"
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
           ports:
             - containerPort: 8200
               name: api
             - containerPort: 8201
-              name: cluster
+              name: raft
           volumeMounts:
             - name: config
               mountPath: /vault/config
@@ -44,4 +53,4 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 1Gi
+            storage: 10Gi
