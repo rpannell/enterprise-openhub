@@ -1,101 +1,128 @@
-name: Deploy RabbitMQ with Vault Integration
+name: Deploy RabbitMQ
 
 on:
   workflow_dispatch:
     inputs:
-      rabbitmq_admin_password:
-        description: "RabbitMQ admin password"
+      vault_url:
+        description: "Vault URL"
         required: true
-        type: string
+      vault_token:
+        description: "Vault Token"
+        required: true
 
 jobs:
-  deploy-rabbitmq:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      # Detect if running under act
-      - name: Detect act
-        id: detect_act
-        run: |
-          if [ "$ACT" = "true" ]; then
-            echo "running_under_act=true" >> $GITHUB_ENV
-          else
-            echo "running_under_act=false" >> $GITHUB_ENV
-          fi
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Install kubectl
-        if: env.running_under_act == 'false'
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
-      - name: Configure kubeconfig
-        if: env.running_under_act == 'false'
+
+      - name: Load local kubeconfig (for local act testing)
         run: |
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_CONTENT" > ~/.kube/config
-        env:
-          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+          mkdir -p $HOME/.kube
+          cp kubeconfig-act $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
-      - name: Install Vault CLI and jq
+      # - name: Install Vault CLI
+      #   run: |
+      #     VAULT_VERSION="1.15.0"
+      #     curl -LO https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip
+      #     sudo apt-get install -y unzip
+      #     unzip vault_${VAULT_VERSION}_linux_amd64.zip
+      #     sudo mv vault /usr/local/bin/
+
+      - name: Ensure RabbitMQ Erlang cookie exists in Vault
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl gpg
+          export KUBECONFIG=/root/.kube/config
 
-          # Add HashiCorp GPG key
-          curl -fsSL https://apt.releases.hashicorp.com/gpg \
-            | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp.gpg
+          # Get Vault pod
+          VAULT_POD=$(kubectl get pod -n vault -l app=vault -o jsonpath="{.items[0].metadata.name}")
 
-          # Add HashiCorp repo (non-interactive)
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com noble main" \
-            | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          echo "Logging into Vault..."
+          kubectl exec -n vault $VAULT_POD -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault login '${{ github.event.inputs.vault_token }}' >/dev/null
+          "
 
-          sudo apt-get update
-          sudo apt-get install -y vault
+          echo "Detecting KV engine version for 'secret/'..."
+          KV_INFO=$(kubectl exec -n vault $VAULT_POD -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault secrets list
+          ")
 
-      - name: Vault AppRole login
-        if: env.running_under_act == 'false'
-        env:
-          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-          VAULT_RABBITMQ_ROLE_ID: ${{ secrets.VAULT_RABBITMQ_ROLE_ID }}
-          VAULT_RABBITMQ_SECRET_ID: ${{ secrets.VAULT_RABBITMQ_SECRET_ID }}
+          if echo \"$KV_INFO\" | grep -q \"secret/.*kv-v2\"; then
+            KV_VERSION=\"v2\"
+          else
+            KV_VERSION=\"v1\"
+          fi
+
+          echo \"KV engine version detected: $KV_VERSION\"
+
+          echo \"Checking for existing Erlang cookie...\"
+          if [ \"$KV_VERSION\" = \"v2\" ]; then
+            EXISTING=$(kubectl exec -n vault $VAULT_POD -- sh -c '
+              export VAULT_ADDR=\"http://127.0.0.1:8200\"
+              vault kv get -field=erlang_cookie secret/rabbitmq 2>/dev/null || true
+            ')
+          else
+            EXISTING=$(kubectl exec -n vault $VAULT_POD -- sh -c '
+              export VAULT_ADDR=\"http://127.0.0.1:8200\"
+              vault read -field=erlang_cookie secret/rabbitmq 2>/dev/null || true
+            ')
+          fi
+
+          if [ -n \"$EXISTING\" ]; then
+            echo \"Erlang cookie already exists:\"
+            echo \"$EXISTING\"
+            exit 0
+          fi
+
+          echo \"No cookie found. Generating a new one...\"
+          COOKIE=$(openssl rand -base64 32)
+
+          echo \"Writing cookie to Vault...\"
+          if [ \"$KV_VERSION\" = \"v2\" ]; then
+            kubectl exec -n vault $VAULT_POD -- sh -c "
+              export VAULT_ADDR='http://127.0.0.1:8200'
+              vault kv put secret/rabbitmq erlang_cookie='$COOKIE'
+            "
+          else
+            kubectl exec -n vault $VAULT_POD -- sh -c "
+              export VAULT_ADDR='http://127.0.0.1:8200'
+              vault write secret/rabbitmq erlang_cookie='$COOKIE'
+            "
+          fi
+
+          echo \"Erlang cookie created:\"
+          echo \"$COOKIE\"
+
+      - name: Deploy RabbitMQ Namespace
         run: |
-          export VAULT_ADDR
-          TOKEN=$(vault write -field=token auth/approle/login \
-            role_id="$VAULT_RABBITMQ_ROLE_ID" \
-            secret_id="$VAULT_RABBITMQ_SECRET_ID")
-          echo "VAULT_TOKEN=$TOKEN" >> $GITHUB_ENV
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f k8s/rabbitmq/namespace.yaml
 
-      - name: Setup RabbitMQ secrets in Vault
-        if: env.running_under_act == 'false'
-        env:
-          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-          VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
-          RABBITMQ_ADMIN_PASSWORD: ${{ github.event.inputs.rabbitmq_admin_password }}
+      - name: Ensure RabbitMQ ServiceAccount exists
         run: |
-          export VAULT_ADDR
-          export VAULT_TOKEN
-          vault login "$VAULT_TOKEN"
+          export KUBECONFIG=/root/.kube/config
+          kubectl get serviceaccount rabbitmq -n rabbitmq >/dev/null 2>&1 || \
+            kubectl create serviceaccount rabbitmq -n rabbitmq
 
-          chmod +x scripts/setup-rabbitmq-vault.sh
-          ./scripts/setup-rabbitmq-vault.sh
-
-      - name: Apply RabbitMQ manifests
-        if: env.running_under_act == 'false'
+      - name: Deploy RabbitMQ Service
         run: |
-          kubectl apply --validate=false -f k8s/rabbitmq/namespace.yaml
-          kubectl apply --validate=false -f k8s/rabbitmq/service.yaml
-          kubectl apply --validate=false -f k8s/rabbitmq/statefulset.yaml
-          kubectl apply --validate=false -f k8s/rabbitmq/ingress.yaml
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f k8s/rabbitmq/service.yaml
 
-      - name: Wait for RabbitMQ pods to be ready
-        if: env.running_under_act == 'false'
+      - name: Deploy RabbitMQ StatefulSet
         run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f k8s/rabbitmq/statefulset.yaml
           kubectl wait --for=condition=ready pod -l app=rabbitmq -n rabbitmq --timeout=300s
-
-      - name: RabbitMQ deployment complete
-        run: echo "RabbitMQ with Vault integration deployed."
