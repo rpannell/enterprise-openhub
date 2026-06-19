@@ -24,22 +24,6 @@ jobs:
           chmod 600 $HOME/.kube/config
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
-      # - name: Install Vault CLI and jq
-      #   run: |
-      #     sudo apt-get update
-      #     sudo apt-get install -y jq curl gpg
-
-      #     # Add HashiCorp GPG key
-      #     curl -fsSL https://apt.releases.hashicorp.com/gpg \
-      #       | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp.gpg
-
-      #     # Add HashiCorp repo (non-interactive)
-      #     echo "deb [signed-by=/usr/share/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com noble main" \
-      #       | sudo tee /etc/apt/sources.list.d/hashicorp.list
-
-      #     sudo apt-get update
-      #     sudo apt-get install -y vault
-
       - name: Apply Vault manifests
         run: |
           export KUBECONFIG=/root/.kube/config
@@ -51,6 +35,70 @@ jobs:
           kubectl apply --validate=false -f k8s/vault/statefulset.yaml
 
           kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s
+
+      - name: Initialize and unseal Vault
+        run: |
+          export KUBECONFIG=/root/.kube/config
+
+          VAULT_POD=$(kubectl get pods -n vault -l app=vault -o jsonpath="{.items[0].metadata.name}")
+
+          echo "Initializing Vault..."
+
+          INIT_OUTPUT=$(kubectl exec -n vault $VAULT_POD -- sh -c '
+            export VAULT_ADDR="http://127.0.0.1:8200"
+            vault operator init -key-shares=1 -key-threshold=1 -format=json
+          ')
+
+          UNSEAL_KEY=$(echo $INIT_OUTPUT | jq -r '.unseal_keys_b64[0]')
+          ROOT_TOKEN=$(echo $INIT_OUTPUT | jq -r '.root_token')
+
+          echo "Unseal Key: $UNSEAL_KEY"
+          echo "Root Token: $ROOT_TOKEN"
+
+          echo "Unsealing Vault..."
+          kubectl exec -n vault $VAULT_POD -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault operator unseal $UNSEAL_KEY
+          "
+          echo "ROOT_TOKEN=$ROOT_TOKEN" >> $GITHUB_ENV
+
+
+      - name: Enable and configure Vault Kubernetes auth
+        run: |
+          export KUBECONFIG=/root/.kube/config
+
+          VAULT_POD=$(kubectl get pod -n vault -l app=vault -o jsonpath="{.items[0].metadata.name}")
+
+          echo "Logging into Vault with root token..."
+          kubectl exec -n vault $VAULT_POD -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault login ${ROOT_TOKEN}
+          "
+
+          echo "Checking if Kubernetes auth is enabled..."
+          if kubectl exec -n vault $VAULT_POD -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault auth list
+          " | grep -q 'kubernetes/'; then
+            echo 'Kubernetes auth already enabled.'
+          else
+            echo 'Enabling Kubernetes auth...'
+            kubectl exec -n vault $VAULT_POD -- sh -c "
+              export VAULT_ADDR='http://127.0.0.1:8200'
+              vault auth enable kubernetes
+            "
+          fi
+
+          echo "Configuring Kubernetes auth method..."
+          kubectl exec -n vault $VAULT_POD -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault write auth/kubernetes/config \
+              token_reviewer_jwt=\"\$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" \
+              kubernetes_host=\"https://${KUBERNETES_PORT_443_TCP_ADDR}:443\" \
+              kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          "
+
+          echo 'Kubernetes auth configured.'
 
       - name: Vault & Consul deployment complete
         run: echo "Vault (Raft) and Consul cluster deployed and bootstrapped."
