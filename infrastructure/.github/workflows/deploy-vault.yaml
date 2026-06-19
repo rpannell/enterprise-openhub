@@ -11,41 +11,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Detect if running under act
-      - name: Detect act
-        id: detect_act
-        run: |
-          if [ "$ACT" = "true" ]; then
-            echo "running_under_act=true" >> $GITHUB_ENV
-          else
-            echo "running_under_act=false" >> $GITHUB_ENV
-          fi
-
       - name: Install kubectl
-        if: env.running_under_act == 'false'
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
-      - name: Install Vault CLI and jq
+      - name: Load local kubeconfig (for local act testing)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl gpg
+          mkdir -p $HOME/.kube
+          cp kubeconfig-act $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
-          # Add HashiCorp GPG key
-          curl -fsSL https://apt.releases.hashicorp.com/gpg \
-            | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp.gpg
+      # - name: Install Vault CLI and jq
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y jq curl gpg
 
-          # Add HashiCorp repo (non-interactive)
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com noble main" \
-            | sudo tee /etc/apt/sources.list.d/hashicorp.list
+      #     # Add HashiCorp GPG key
+      #     curl -fsSL https://apt.releases.hashicorp.com/gpg \
+      #       | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp.gpg
 
-          sudo apt-get update
-          sudo apt-get install -y vault
+      #     # Add HashiCorp repo (non-interactive)
+      #     echo "deb [signed-by=/usr/share/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com noble main" \
+      #       | sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+      #     sudo apt-get update
+      #     sudo apt-get install -y vault
 
       - name: Apply Vault manifests
-        if: env.running_under_act == 'false'
         run: |
           export KUBECONFIG=/root/.kube/config
 
@@ -56,14 +51,6 @@ jobs:
           kubectl apply --validate=false -f k8s/vault/statefulset.yaml
 
           kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s
-
-      - name: Bootstrap Vault (init, unseal, AppRole)
-        if: env.running_under_act == 'false'
-        env:
-          VAULT_ADDR: "http://vault.vault.svc.cluster.local:8200"
-        run: |
-          chmod +x scripts/bootstrap-vault.sh
-          ./scripts/bootstrap-vault.sh
 
       - name: Vault & Consul deployment complete
         run: echo "Vault (Raft) and Consul cluster deployed and bootstrapped."

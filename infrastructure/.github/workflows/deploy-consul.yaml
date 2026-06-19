@@ -17,6 +17,13 @@ jobs:
           chmod +x kubectl
           mv kubectl /usr/local/bin/kubectl
 
+      - name: Load local kubeconfig (for local act testing)
+        run: |
+          mkdir -p $HOME/.kube
+          cp kubeconfig-act $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
+
       - name: Apply Vault manifests
         run: |
           export KUBECONFIG=/root/.kube/config
