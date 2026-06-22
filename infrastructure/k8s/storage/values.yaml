@@ -1,0 +1,36 @@
+replicas: 4
+
+mode: distributed
+
+persistence:
+  enabled: true
+  size: 100Gi
+  storageClass: standard
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+rootUser: "minioadmin"
+rootPassword: "ChangeMeNow!"
+
+service:
+  type: ClusterIP
+
+buckets:
+  - name: loki-chunks
+    policy: none
+    purge: false
+  - name: loki-ruler
+    policy: none
+    purge: false
+  - name: loki-admin
+    policy: none
+    purge: false
+  - name: tempo
+    policy: none
+    purge: false
+  - name: mimir
+    policy: none
+    purge: false

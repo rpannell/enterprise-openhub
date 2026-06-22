@@ -1,0 +1,43 @@
+name: Install Prometheus Operator on Real Cluster
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+  install-prometheus-operator:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Verify kubeconfig and cluster
+        run: |
+          kubectl config view
+          kubectl get nodes
+
+      - name: Add Prometheus Community Repo
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+      - name: Install kube-prometheus-stack (Prometheus Operator)
+        run: |
+          CHART_VERSION=$(helm search repo prometheus-community/kube-prometheus-stack -o json | jq -r '.[0].version')
+          helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+            --namespace monitoring --create-namespace \
+            --version "$CHART_VERSION" \
+            --wait --timeout 10m
+
+      - name: Verify installation
+        run: |
+          kubectl get pods -n monitoring
+          kubectl get crds | grep monitoring.coreos.com

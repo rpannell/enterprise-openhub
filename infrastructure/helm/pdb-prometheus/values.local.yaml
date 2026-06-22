@@ -1,0 +1,13 @@
+namespace: observability
+
+prometheus:
+  enabled: true
+  minAvailable: 1
+
+alertmanager:
+  enabled: true
+  minAvailable: 1
+
+operator:
+  enabled: true
+  minAvailable: 1

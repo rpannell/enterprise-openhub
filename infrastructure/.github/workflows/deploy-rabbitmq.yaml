@@ -9,6 +9,12 @@ on:
       vault_token:
         description: "Vault Token"
         required: true
+      default_user:
+        description: "RabbitMQ admin username"
+        required: true
+      default_password:
+        description: "RabbitMQ admin password"
+        required: true
 
 jobs:
   deploy:
@@ -24,7 +30,6 @@ jobs:
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
-
       - name: Load local kubeconfig (for local act testing)
         run: |
           mkdir -p $HOME/.kube
@@ -32,78 +37,59 @@ jobs:
           chmod 600 $HOME/.kube/config
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
-      # - name: Install Vault CLI
-      #   run: |
-      #     VAULT_VERSION="1.15.0"
-      #     curl -LO https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip
-      #     sudo apt-get install -y unzip
-      #     unzip vault_${VAULT_VERSION}_linux_amd64.zip
-      #     sudo mv vault /usr/local/bin/
-
-      - name: Ensure RabbitMQ Erlang cookie exists in Vault
+      - name: Configure Vault for RabbitMQ (policy, role, secret)
         run: |
           export KUBECONFIG=/root/.kube/config
 
-          # Get Vault pod
           VAULT_POD=$(kubectl get pod -n vault -l app=vault -o jsonpath="{.items[0].metadata.name}")
 
           echo "Logging into Vault..."
+            kubectl exec -n vault $VAULT_POD -- sh -c "
+              export VAULT_ADDR='http://127.0.0.1:8200'
+              vault login \"${{ github.event.inputs.vault_token }}\" >/dev/null
+            "
+
+
+          echo "Ensuring KV engine is mounted at secret/..."
+          kubectl exec -n vault $VAULT_POD -- sh -c '
+            export VAULT_ADDR="http://127.0.0.1:8200"
+            vault secrets list | grep -q "^secret/" || vault secrets enable -path=secret kv-v2
+          '
+
+          echo "Creating/Updating RabbitMQ Vault policy..."
+          kubectl exec -n vault $VAULT_POD -- sh -c '
+            export VAULT_ADDR="http://127.0.0.1:8200"
+
+            cat <<'"EOF"' > /tmp/rabbitmq-policy.hcl
+          path "secret/data/rabbitmq" {
+            capabilities = ["read"]
+          }
+          path "secret/metadata/rabbitmq" {
+            capabilities = ["read"]
+          }
+          EOF
+
+            vault policy write rabbitmq /tmp/rabbitmq-policy.hcl
+          '
+
+          echo "Creating/Updating RabbitMQ Vault role..."
           kubectl exec -n vault $VAULT_POD -- sh -c "
             export VAULT_ADDR='http://127.0.0.1:8200'
-            vault login '${{ github.event.inputs.vault_token }}' >/dev/null
+            vault write auth/kubernetes/role/rabbitmq \
+              bound_service_account_names='rabbitmq' \
+              bound_service_account_namespaces='rabbitmq' \
+              policies='rabbitmq' \
+              ttl='24h'
           "
 
-          echo "Detecting KV engine version for 'secret/'..."
-          KV_INFO=$(kubectl exec -n vault $VAULT_POD -- sh -c "
+          echo "Ensuring RabbitMQ secret exists..."
+          kubectl exec -n vault $VAULT_POD -- sh -c "
             export VAULT_ADDR='http://127.0.0.1:8200'
-            vault secrets list
-          ")
-
-          if echo \"$KV_INFO\" | grep -q \"secret/.*kv-v2\"; then
-            KV_VERSION=\"v2\"
-          else
-            KV_VERSION=\"v1\"
-          fi
-
-          echo \"KV engine version detected: $KV_VERSION\"
-
-          echo \"Checking for existing Erlang cookie...\"
-          if [ \"$KV_VERSION\" = \"v2\" ]; then
-            EXISTING=$(kubectl exec -n vault $VAULT_POD -- sh -c '
-              export VAULT_ADDR=\"http://127.0.0.1:8200\"
-              vault kv get -field=erlang_cookie secret/rabbitmq 2>/dev/null || true
-            ')
-          else
-            EXISTING=$(kubectl exec -n vault $VAULT_POD -- sh -c '
-              export VAULT_ADDR=\"http://127.0.0.1:8200\"
-              vault read -field=erlang_cookie secret/rabbitmq 2>/dev/null || true
-            ')
-          fi
-
-          if [ -n \"$EXISTING\" ]; then
-            echo \"Erlang cookie already exists:\"
-            echo \"$EXISTING\"
-            exit 0
-          fi
-
-          echo \"No cookie found. Generating a new one...\"
-          COOKIE=$(openssl rand -base64 32)
-
-          echo \"Writing cookie to Vault...\"
-          if [ \"$KV_VERSION\" = \"v2\" ]; then
-            kubectl exec -n vault $VAULT_POD -- sh -c "
-              export VAULT_ADDR='http://127.0.0.1:8200'
-              vault kv put secret/rabbitmq erlang_cookie='$COOKIE'
-            "
-          else
-            kubectl exec -n vault $VAULT_POD -- sh -c "
-              export VAULT_ADDR='http://127.0.0.1:8200'
-              vault write secret/rabbitmq erlang_cookie='$COOKIE'
-            "
-          fi
-
-          echo \"Erlang cookie created:\"
-          echo \"$COOKIE\"
+            vault kv put secret/rabbitmq \
+              admin_user='${{ github.event.inputs.default_user }}' \
+              admin_password='${{ github.event.inputs.default_password }}' \
+              erlang_cookie='$(openssl rand -base64 32)'
+          "
 
       - name: Deploy RabbitMQ Namespace
         run: |

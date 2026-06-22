@@ -1,0 +1,19 @@
+fullnameOverride: rabbitmq
+
+auth:
+  username: admin
+  existingPasswordSecret: rabbitmq-auth
+
+replicaCount: 3
+
+clustering:
+  enabled: true
+
+extraPlugins: "rabbitmq_management rabbitmq_prometheus"
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: prometheus

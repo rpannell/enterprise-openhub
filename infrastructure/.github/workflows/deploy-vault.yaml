@@ -24,27 +24,64 @@ jobs:
           chmod 600 $HOME/.kube/config
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+
+      - name: Deploy Vault Namespace
+        run: |
+          export KUBECONFIG=/root/.kube/config
+          kubectl apply -f k8s/vault/namespace.yaml
+
+
+      - name: Install Vault Injector via Helm
+        run: |
+          export KUBECONFIG=/root/.kube/config
+
+          helm repo add hashicorp https://helm.releases.hashicorp.com
+          helm repo update
+
+          helm install vault-injector hashicorp/vault \
+            --namespace vault \
+            --set "injector.enabled=true" \
+            --set "server.enabled=false" \
+            --set "injector.externalVaultAddr=http://vault.vault.svc:8200"
+
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/name=vault-agent-injector \
+            -n vault --timeout=120s
+
+
+
+
+
       - name: Apply Vault manifests
         run: |
           export KUBECONFIG=/root/.kube/config
 
-          kubectl apply --validate=false -f k8s/vault/namespace.yaml
-          kubectl apply --validate=false -f k8s/vault/config.yaml
+          kubectl apply --validate=false -f k8s/vault/serviceaccount.yaml
+          kubectl apply --validate=false -f k8s/vault/clusterrolebinding.yaml
           kubectl apply --validate=false -f k8s/vault/service.yaml
           kubectl apply --validate=false -f k8s/vault/internal-service.yaml
           kubectl apply --validate=false -f k8s/vault/statefulset.yaml
 
           kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s
 
-      - name: Initialize and unseal Vault
+      - name: Initialize and unseal Vault (dynamic Raft cluster)
         run: |
           export KUBECONFIG=/root/.kube/config
 
-          VAULT_POD=$(kubectl get pods -n vault -l app=vault -o jsonpath="{.items[0].metadata.name}")
+          echo "Waiting for Vault pods..."
+          kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s
 
-          echo "Initializing Vault..."
+          VAULT_PODS=($(kubectl get pod -n vault -l app=vault -o jsonpath="{.items[*].metadata.name}"))
+          VAULT_0=${VAULT_PODS[0]}
 
-          INIT_OUTPUT=$(kubectl exec -n vault $VAULT_POD -- sh -c '
+          echo "Vault pods detected: ${VAULT_PODS[@]}"
+          echo "Using $VAULT_0 as initializer"
+
+          echo "Initializing Vault on $VAULT_0..."
+          INIT_OUTPUT=$(kubectl exec -n vault $VAULT_0 -- sh -c '
             export VAULT_ADDR="http://127.0.0.1:8200"
             vault operator init -key-shares=1 -key-threshold=1 -format=json
           ')
@@ -52,16 +89,47 @@ jobs:
           UNSEAL_KEY=$(echo $INIT_OUTPUT | jq -r '.unseal_keys_b64[0]')
           ROOT_TOKEN=$(echo $INIT_OUTPUT | jq -r '.root_token')
 
-          echo "Unseal Key: $UNSEAL_KEY"
-          echo "Root Token: $ROOT_TOKEN"
-
-          echo "Unsealing Vault..."
-          kubectl exec -n vault $VAULT_POD -- sh -c "
+          echo "Unsealing $VAULT_0 (leader)..."
+          kubectl exec -n vault $VAULT_0 -- sh -c "
             export VAULT_ADDR='http://127.0.0.1:8200'
             vault operator unseal $UNSEAL_KEY
           "
+
+          echo "Joining and unsealing remaining pods FROM THEMSELVES to leader..."
+          for POD in "${VAULT_PODS[@]:1}"; do
+            echo "Raft join on $POD -> leader $VAULT_0..."
+            kubectl exec -n vault $POD -- sh -c "
+              export VAULT_ADDR='http://127.0.0.1:8200'
+              vault operator raft join http://$VAULT_0.vault-internal:8200
+            "
+
+            echo "Unsealing $POD..."
+            kubectl exec -n vault $POD -- sh -c "
+              export VAULT_ADDR='http://127.0.0.1:8200'
+              vault operator unseal $UNSEAL_KEY
+            "
+          done
+
           echo "ROOT_TOKEN=$ROOT_TOKEN" >> $GITHUB_ENV
 
+          echo "Cluster status from $VAULT_0:"
+          kubectl exec -n vault $VAULT_0 -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault status
+          "
+
+          echo "Verifying raft cluster..."
+          kubectl exec -n vault $VAULT_0 -- sh -c "
+            export VAULT_ADDR='http://127.0.0.1:8200'
+            vault login ${ROOT_TOKEN} >/dev/null
+            vault operator raft list-peers
+          "
+
+          echo "======================================"
+          echo " Vault Root Token (Admin Token)"
+          echo "======================================"
+          echo "$ROOT_TOKEN"
+          echo "======================================"
 
       - name: Enable and configure Vault Kubernetes auth
         run: |
@@ -89,14 +157,13 @@ jobs:
             "
           fi
 
-          echo "Configuring Kubernetes auth method..."
-          kubectl exec -n vault $VAULT_POD -- sh -c "
-            export VAULT_ADDR='http://127.0.0.1:8200'
+          kubectl exec -n vault $VAULT_POD -- sh -c '
+            export VAULT_ADDR="http://127.0.0.1:8200"
             vault write auth/kubernetes/config \
-              token_reviewer_jwt=\"\$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" \
-              kubernetes_host=\"https://${KUBERNETES_PORT_443_TCP_ADDR}:443\" \
+              token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+              kubernetes_host="https://kubernetes.default.svc:443" \
               kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-          "
+          '
 
           echo 'Kubernetes auth configured.'
 

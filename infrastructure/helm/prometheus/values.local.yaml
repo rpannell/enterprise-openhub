@@ -1,0 +1,54 @@
+namespace: observability
+
+grafana:
+  enabled: false
+
+prometheusOperator:
+  replicaCount: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: prometheus-operator
+
+prometheus:
+  prometheusSpec:
+    replicas: 2
+    retention: 48h
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    podAntiAffinity: soft
+    resources:
+      requests:
+        cpu: 300m
+        memory: 1Gi
+      limits:
+        cpu: 1
+        memory: 2Gi
+
+alertmanager:
+  alertmanagerSpec:
+    replicas: 2
+    podAntiAffinity: soft
+
+kube-state-metrics:
+  replicaCount: 2
+
+prometheus-node-exporter:
+  hostRootFsMount:
+    enabled: false
+  tolerations:
+    - operator: Exists
+  securityContext:
+    runAsNonRoot: false
+
+thanosRuler:
+  enabled: false

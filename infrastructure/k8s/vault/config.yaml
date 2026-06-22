@@ -6,15 +6,17 @@ metadata:
 data:
   vault.hcl: |
     ui = true
+
     listener "tcp" {
-      address     = "0.0.0.0:8200"
-      tls_disable = 1
+      address         = "0.0.0.0:8200"
+      cluster_address = "0.0.0.0:8201"
+      tls_disable     = 1
     }
 
     storage "raft" {
-      path = "/vault/data"
-      node_id = "$(POD_NAME)"
+      path    = "/vault/data"
+      node_id = "{{HOSTNAME}}"
     }
 
-    cluster_addr = "http://$(POD_NAME).vault-internal:8201"
-    api_addr     = "http://$(POD_NAME).vault-internal:8200"
+    api_addr     = "http://{{HOSTNAME}}.vault.svc:8200"
+    cluster_addr = "http://{{HOSTNAME}}.vault-internal:8201"
