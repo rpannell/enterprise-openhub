@@ -1,0 +1,87 @@
+name: Deploy RabbitMQ Cluster
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      VAULT_NAMESPACE: vault
+      RABBITMQ_NAMESPACE: rabbitmq
+      SECRET_PATH: secret/rabbitmq
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Vault env
+        run: |
+          echo "VAULT_ADDR=$VAULT_ADDR"
+          echo "VAULT_TOKEN is set: $([ -n "$VAULT_TOKEN" ] && echo yes || echo no)"
+
+      - name: Install kubectl + helm + vault cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip jq
+
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Ensure RabbitMQ namespace
+        env:
+          RABBITMQ_NAMESPACE: ${{ secrets.RABBITMQ_NAMESPACE }}
+        run: |
+          kubectl create namespace $RABBITMQ_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
+
+      - name: Ensure Erlang cookie (Vault handled in script)
+        env:
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_NAMESPACE: ${{ secrets.VAULT_NAMESPACE }}
+          VAULT_LABEL_SELECTOR: ${{ secrets.VAULT_LABEL_SELECTOR }}
+        run: |
+          chmod +x k8s/rabbitmq/ensure-vault-secret.sh
+          ./k8s/rabbitmq/ensure-vault-secret.sh
+
+      # --------------------------------------------------
+      # STEP 3: CREATE RABBITMQ SECRET
+      # --------------------------------------------------
+      - name: Create RabbitMQ credentials secret
+        run: |
+          kubectl -n $RABBITMQ_NAMESPACE create secret generic rabbitmq-auth \
+            --from-literal=username=${{ secrets.RABBITMQ_USER }} \
+            --from-literal=password=${{ secrets.RABBITMQ_PASSWORD }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # --------------------------------------------------
+      # STEP 4: HELM DEPLOY
+      # --------------------------------------------------
+      - name: Deploy RabbitMQ
+        run: |
+          helm repo add rabbitmq https://rabbitmq.github.io/helm-charts
+          helm repo update
+
+          helm upgrade --install rabbitmq rabbitmq/rabbitmq \
+            --namespace $RABBITMQ_NAMESPACE \
+            --set replicaCount=3 \
+            --set auth.username=${{ secrets.RABBITMQ_USER }} \
+            --set auth.existingPasswordSecret=rabbitmq-auth \
+            --set auth.erlangCookie="$COOKIE" \
+            --set extraPlugins="rabbitmq_management rabbitmq_prometheus" \
+            --set metrics.enabled=true \
+            --set metrics.serviceMonitor.enabled=true \
+            --set metrics.serviceMonitor.additionalLabels.release=prometheus
+
+      # --------------------------------------------------
+      # STEP 5: VERIFY
+      # --------------------------------------------------
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n $RABBITMQ_NAMESPACE
+          kubectl get svc -n $RABBITMQ_NAMESPACE

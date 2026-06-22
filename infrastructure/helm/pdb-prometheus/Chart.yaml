@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pdb-prometheus
+description: PodDisruptionBudgets for kube-prometheus-stack components
+type: application
+version: 0.1.0
+appVersion: "1.0"

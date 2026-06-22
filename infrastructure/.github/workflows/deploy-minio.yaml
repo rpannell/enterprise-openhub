@@ -1,0 +1,48 @@
+name: Deploy MinIO (HA)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-minio:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        
+      # ACT: mount kubeconfig
+      # act --container-options "--volume $HOME/.kube:/root/.kube"
+      - name: Verify kubeconfig
+        run: |
+          kubectl config current-context
+          kubectl get nodes
+
+      
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Add MinIO repo
+        run: |
+          helm repo add minio https://charts.min.io/
+          helm repo update
+
+      - name: Create storage namespace
+        run: |
+          kubectl create namespace storage --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy MinIO (HA)
+        run: |
+          helm upgrade --install minio minio/minio \
+            -n storage \
+            -f k8s/storage/values.yaml \
+            --wait --timeout 10m
+
+      - name: Verify MinIO
+        run: |
+          kubectl get pods -n storage
+          kubectl get pvc -n storage
+          kubectl get svc -n storage

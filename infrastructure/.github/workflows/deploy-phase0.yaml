@@ -1,0 +1,97 @@
+name: phase0-observability
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment (local, dev, prod)"
+        required: true
+        default: "local"
+        type: choice
+        options:
+          - local
+          - dev
+          - prod
+
+jobs:
+  phase0:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -----------------------------
+      # RESOLVE ENVIRONMENT VARIABLE
+      # -----------------------------
+      - name: Resolve ENVIRONMENT
+        run: |
+          # Prefer workflow_dispatch input
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+          # Fallback to ACT-provided env var
+          elif [ -n "$ENVIRONMENT" ]; then
+            echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+          else
+            echo "ERROR: ENVIRONMENT not provided"
+            exit 1
+          fi
+
+      - name: Print ENVIRONMENT
+        run: echo "ENVIRONMENT = $ENVIRONMENT"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Add Helm Repos
+        run: |
+          helm repo add jetstack https://charts.jetstack.io
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+      # -------------------------
+      # CERT-MANAGER INSTALLATION
+      # -------------------------
+      - name: Install cert-manager
+        run: |
+          VALUES="helm/cert-manager/values.${ENVIRONMENT}.yaml"
+          echo "Using values file: $VALUES"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install cert-manager jetstack/cert-manager \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            -f "$VALUES" \
+            --wait
+
+      # --------------------------------------
+      # PROMETHEUS OPERATOR (NO GRAFANA)
+      # --------------------------------------
+      - name: Install kube-prometheus-stack
+        run: |
+          VALUES="helm/prometheus/values.${ENVIRONMENT}.yaml"
+          echo "Using values file: $VALUES"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            -f "$VALUES" \
+            --wait
+
+      # --------------------------------------
+      # PDB WRAPPER CHART
+      # --------------------------------------
+      - name: Install PDB wrapper chart
+        run: |
+          VALUES="helm/pdb-prometheus/values.${ENVIRONMENT}.yaml"
+          echo "Using values file: $VALUES"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install pdb-prometheus ./helm/pdb-prometheus \
+            --namespace "$NAMESPACE" \
+            -f "$VALUES" \
+            --wait

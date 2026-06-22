@@ -1,0 +1,12 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: prometheus-pdb
+  namespace: {{ .Values.namespace }}
+spec:
+  minAvailable: {{ .Values.prometheus.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+{{- end }}

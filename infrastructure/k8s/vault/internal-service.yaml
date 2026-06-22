@@ -5,8 +5,12 @@ metadata:
   namespace: vault
 spec:
   clusterIP: None
-  ports:
-    - port: 8201
-      name: raft
   selector:
     app: vault
+  ports:
+    - name: api
+      port: 8200
+      targetPort: 8200
+    - name: raft
+      port: 8201
+      targetPort: 8201

@@ -1,0 +1,12 @@
+{{- if .Values.operator.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: prometheus-operator-pdb
+  namespace: {{ .Values.namespace }}
+spec:
+  minAvailable: {{ .Values.operator.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-operator
+{{- end }}

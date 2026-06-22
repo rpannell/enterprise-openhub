@@ -1,0 +1,68 @@
+name: Deploy HA LGTM Stack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-lgtm-ha:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      # ACT: mount kubeconfig
+      # act --container-options "--volume $HOME/.kube:/root/.kube"
+      - name: Verify kubeconfig
+        run: |
+          kubectl config current-context
+          kubectl get nodes
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Add Grafana repo
+        run: |
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo update
+
+      - name: Create monitoring namespace
+        run: |
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Loki (distributed)
+        run: |
+          helm upgrade --install loki grafana/loki \
+            -n monitoring \
+            -f k8s/monitoring/values.yaml \
+            --wait --timeout 20m
+
+      - name: Deploy Tempo (distributed)
+        run: |
+          helm upgrade --install tempo grafana/tempo \
+            -n monitoring \
+            -f k8s/monitoring/values.yaml \
+            --wait --timeout 20m
+
+      - name: Deploy Mimir (distributed)
+        run: |
+          helm upgrade --install mimir grafana/mimir \
+            -n monitoring \
+            -f k8s/monitoring/values.yaml \
+            --wait --timeout 20m
+
+      - name: Deploy Grafana
+        run: |
+          helm upgrade --install grafana grafana/grafana \
+            -n monitoring \
+            -f k8s/monitoring/values.yaml \
+            --wait --timeout 10m
+
+      - name: Verify LGTM stack
+        run: |
+          kubectl get pods -n monitoring
+          kubectl get pvc -n monitoring
+          kubectl get svc -n monitoring

@@ -1,0 +1,23 @@
+namespace: platform-system
+
+replicaCount: 2
+
+installCRDs: true
+
+webhook:
+  replicaCount: 2
+
+cainjector:
+  replicaCount: 2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

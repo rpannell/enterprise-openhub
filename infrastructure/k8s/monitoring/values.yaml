@@ -1,0 +1,189 @@
+# ============================
+# GLOBAL
+# ============================
+global:
+  storageClass: local-path
+
+# ============================
+# GRAFANA (HA + PVC)
+# ============================
+grafana:
+  replicas: 3
+
+  adminUser: admin
+  adminPassword: ChangeMeNow!
+
+  persistence:
+    enabled: true
+    type: pvc
+    size: 20Gi
+    storageClassName: local-path
+
+  service:
+    type: LoadBalancer
+
+# ============================
+# LOKI (grafana/loki, Distributed, TSDB + S3)
+# ============================
+loki:
+  deploymentMode: Distributed
+  useTestSchema: false
+
+  storage:
+    type: s3
+    bucketNames:
+      chunks: loki-chunks
+      ruler: loki-ruler
+      admin: loki-admin
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  ingester:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClassName: local-path
+      mountPath: /var/loki
+
+  querier:
+    replicas: 1
+
+  queryFrontend:
+    replicas: 1
+
+  compactor:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClassName: local-path
+      mountPath: /var/loki
+
+  indexGateway:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClassName: local-path
+      mountPath: /var/loki
+
+  gateway:
+    enabled: true
+
+  config: |
+    auth_enabled: false
+
+    common:
+      replication_factor: 1
+      path_prefix: /var/loki
+      storage:
+        s3:
+          endpoint: http://minio.storage.svc.cluster.local:9000
+          access_key_id: minioadmin
+          secret_access_key: ChangeMeNow!
+          insecure: true
+          s3forcepathstyle: true
+          bucketnames: loki-chunks
+
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: s3
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    storage_config:
+      aws:
+        s3: http://minio.storage.svc.cluster.local:9000
+        bucketnames: loki-chunks
+        access_key_id: minioadmin
+        secret_access_key: ChangeMeNow!
+        insecure: true
+        s3forcepathstyle: true
+
+      tsdb_shipper:
+        active_index_directory: /var/loki/index
+        cache_location: /var/loki/cache
+
+    ingester:
+      lifecycler:
+        ring:
+          kvstore:
+            store: memberlist
+      chunk_idle_period: 5m
+      chunk_retain_period: 30s
+
+    memberlist:
+      join_members:
+        - loki-memberlist.monitoring.svc.cluster.local
+
+# ============================
+# TEMPO (grafana/tempo, Distributed)
+# ============================
+tempo:
+  mode: distributed
+
+  storage:
+    trace:
+      backend: s3
+      s3:
+        endpoint: http://minio.storage.svc.cluster.local:9000
+        bucket: tempo
+        access_key: minioadmin
+        secret_key: ChangeMeNow!
+        insecure: true
+
+  replicas: 3
+
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClassName: local-path
+
+  metricsGenerator:
+    enabled: true
+
+# ============================
+# MIMIR (grafana/mimir, Distributed)
+# ============================
+mimir:
+  mode: distributed
+
+  structuredConfig:
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: http://minio.storage.svc.cluster.local:9000
+          bucket_name: mimir
+          access_key_id: minioadmin
+          secret_access_key: ChangeMeNow!
+          insecure: true
+
+    blocks_storage:
+      backend: s3
+
+    alertmanager_storage:
+      backend: s3
+
+    ruler_storage:
+      backend: s3
+
+  replicas: 3
+
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClassName: local-path

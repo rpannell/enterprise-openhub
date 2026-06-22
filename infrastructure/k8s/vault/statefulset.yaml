@@ -14,21 +14,37 @@ spec:
       labels:
         app: vault
     spec:
-      serviceAccountName: default
+      serviceAccountName: vault
       containers:
         - name: vault
           image: hashicorp/vault:1.15.0
-          command: ["vault"]
+          command: ["/bin/sh", "-c"]
           args:
-            - "server"
-            - "-config=/vault/config/vault.hcl"
+            - |
+              cat <<EOF >/vault/config/vault.hcl
+              ui = true
+
+              listener "tcp" {
+                address         = "0.0.0.0:8200"
+                cluster_address = "0.0.0.0:8201"
+                tls_disable     = 1
+              }
+
+              storage "raft" {
+                path    = "/vault/data"
+                node_id = "${HOSTNAME}"
+              }
+
+              api_addr     = "http://${HOSTNAME}.vault.svc:8200"
+              cluster_addr = "http://${HOSTNAME}.vault-internal:8201"
+              EOF
+
+              exec vault server -config=/vault/config/vault.hcl
           env:
-            - name: POD_NAME
+            - name: HOSTNAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: SKIP_CHOWN
-              value: "true"
           securityContext:
             capabilities:
               add: ["IPC_LOCK"]
@@ -44,8 +60,7 @@ spec:
               mountPath: /vault/data
       volumes:
         - name: config
-          configMap:
-            name: vault-config
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data

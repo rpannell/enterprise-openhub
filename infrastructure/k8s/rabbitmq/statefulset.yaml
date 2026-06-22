@@ -19,18 +19,16 @@ spec:
     metadata:
       labels:
         app: rabbitmq
-
       annotations:
-        # Enable Vault Agent Injector
         vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-inject-token: "true"
+        vault.hashicorp.com/agent-inject-vault-addr: "http://vault.vault.svc:8200"
         vault.hashicorp.com/role: "rabbitmq"
 
-        # Inject secrets from the correct Vault path
         vault.hashicorp.com/agent-inject-secret-admin_user: "secret/rabbitmq"
         vault.hashicorp.com/agent-inject-secret-admin_password: "secret/rabbitmq"
         vault.hashicorp.com/agent-inject-secret-erlang_cookie: "secret/rabbitmq"
 
-        # Templates for each secret
         vault.hashicorp.com/agent-inject-template-admin_user: |
           {{- with secret "secret/rabbitmq" -}}
           {{ .Data.data.admin_user }}
@@ -48,23 +46,33 @@ spec:
 
     spec:
       serviceAccountName: rabbitmq
-
       containers:
         - name: rabbitmq
           image: rabbitmq:3.13-management
-
           command:
             - "bash"
             - "-c"
             - |
+              # Load Vault-injected secrets
               export RABBITMQ_DEFAULT_USER="$(cat /vault/secrets/admin_user)"
               export RABBITMQ_DEFAULT_PASS="$(cat /vault/secrets/admin_password)"
               export RABBITMQ_ERLANG_COOKIE="$(cat /vault/secrets/erlang_cookie)"
 
-              export RABBITMQ_MANAGEMENT_TCP_PORT=15672
-              export RABBITMQ_MANAGEMENT_HTTP_PATH_PREFIX=/rabbitmq
+              # Start RabbitMQ in background
+              rabbitmq-server -detached
+              rabbitmqctl await_startup
 
-              rabbitmq-server
+              # Create admin user (idempotent)
+              rabbitmqctl add_user "$RABBITMQ_DEFAULT_USER" "$RABBITMQ_DEFAULT_PASS" || true
+              rabbitmqctl set_user_tags "$RABBITMQ_DEFAULT_USER" administrator
+              rabbitmqctl set_permissions -p / "$RABBITMQ_DEFAULT_USER" ".*" ".*" ".*"
+
+              # Restart app cleanly
+              rabbitmqctl stop_app
+              rabbitmqctl start_app
+
+              # Keep container alive
+              tail -f /var/log/rabbitmq/*.log
 
           ports:
             - containerPort: 5672
@@ -73,14 +81,15 @@ spec:
               name: management
 
           volumeMounts:
-            - name: data
+            - name: rabbit-data
               mountPath: /var/lib/rabbitmq
 
   volumeClaimTemplates:
     - metadata:
-        name: data
+        name: rabbit-data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes:
+          - ReadWriteOnce
         resources:
           requests:
-            storage: 1Gi
+            storage: 10Gi
