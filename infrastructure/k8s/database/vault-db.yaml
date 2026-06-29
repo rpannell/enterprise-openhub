@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-db-credentials
+  namespace: platform-apps
+type: Opaque
+stringData:
+  username: vault_user
+  password: vault_supersecurepassword
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: vault-db
+  namespace: platform-apps
+spec:
+  cluster:
+    name: platform-db
+    namespace: platform-system
+  name: vault
+  owner:
+    name: vault_user
+    secret:
+      name: vault-db-credentials

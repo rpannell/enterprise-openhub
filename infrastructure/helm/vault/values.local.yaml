@@ -1,0 +1,52 @@
+namespace: platform-security
+
+server:
+  ha:
+    enabled: true
+    raft:
+      enabled: true
+      config: |
+        ui = true
+
+        listener "tcp" {
+          address = "0.0.0.0:8200"
+          cluster_address = "0.0.0.0:8201"
+          tls_disable = 1
+        }
+
+        storage "raft" {
+          path = "/vault/data"
+          node_id = "${HOSTNAME}"
+        }
+
+        service_registration "kubernetes" {}
+
+  # Disable standalone mode
+  standalone:
+    enabled: false
+
+  # Number of Vault pods
+  replicaCount: 3
+
+  # Disable probes for CI auto-unseal
+  readinessProbe:
+    enabled: false
+  livenessProbe:
+    enabled: false
+
+  # Storage for Raft data
+  dataStorage:
+    enabled: true
+    size: 1Gi
+    storageClass: "local-path"
+
+injector:
+  enabled: false
+
+ui:
+  enabled: true
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true

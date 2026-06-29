@@ -1,0 +1,46 @@
+namespace: platform-security
+
+replicaCount: 2
+
+image:
+  tag: "24.0.4" # example stable version
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1
+    memory: 1Gi
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: kong
+  tls: []
+  annotations:
+    kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: keycloak.local.test
+      paths:
+        - path: /
+          pathType: Prefix
+
+postgresql:
+  enabled: false # You use CloudNativePG instead
+
+externalDatabase:
+  host: keycloak-postgres.platform-system.svc.cluster.local
+  port: 5432
+  database: keycloak
+  existingSecret: keycloak-db-secret
+
+mesh:
+  enabled: false
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true

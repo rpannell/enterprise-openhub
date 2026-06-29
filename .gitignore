@@ -1,1 +1,46 @@
 enterprise-crm.code-workspace
+
+# ── .NET ────────────────────────────────────────────────────────────────────
+
+# Build outputs
+bin/
+obj/
+publish/
+*.nupkg
+*.snupkg
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# Test results
+TestResults/
+coverage/
+*.coveragexml
+
+# Aspire user secrets / local overrides
+**/appsettings.*.local.json
+**/Properties/launchSettings.json
+
+# ── React / Node ─────────────────────────────────────────────────────────────
+
+node_modules/
+dist/
+.vite/
+
+# Local env overrides — .env.example is committed, locals are not
+.env.local
+.env.*.local
+
+# ── Editors / OS ─────────────────────────────────────────────────────────────
+
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

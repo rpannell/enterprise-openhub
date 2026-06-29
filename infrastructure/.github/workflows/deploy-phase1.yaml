@@ -1,0 +1,186 @@
+name: phase1-security
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment (local, dev, prod)"
+        required: true
+        default: "local"
+        type: choice
+        options:
+          - local
+          - dev
+          - prod
+
+jobs:
+  phase1:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -----------------------------
+      # RESOLVE ENVIRONMENT VARIABLE
+      # -----------------------------
+      - name: Resolve ENVIRONMENT
+        run: |
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+          elif [ -n "$ENVIRONMENT" ]; then
+            echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+          else
+            echo "ERROR: ENVIRONMENT not provided"
+            exit 1
+          fi
+
+      - name: Print ENVIRONMENT
+        run: echo "ENVIRONMENT = $ENVIRONMENT"
+
+      # -----------------------------
+      # DETECT WSL2 (for fake CNPG)
+      # -----------------------------
+      - name: Detect WSL2
+        run: |
+          if uname -r | grep -qi "microsoft"; then
+            echo "WSL2=true" >> $GITHUB_ENV
+          else
+            echo "WSL2=false" >> $GITHUB_ENV
+          fi
+
+      - name: Print WSL2 Mode
+        run: echo "WSL2 = $WSL2"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      # -------------------------
+      # ADD HELM REPOSITORIES
+      # -------------------------
+      - name: Add Helm Repos
+        run: |
+          helm repo add hashicorp https://helm.releases.hashicorp.com
+          helm repo add codecentric https://codecentric.github.io/helm-charts
+          helm repo update
+
+      - name: Remove Vault injector webhook (WSL2/ACT)
+        if: env.WSL2 == 'true'
+        run: |
+          kubectl delete mutatingwebhookconfiguration vault-agent-injector-cfg --ignore-not-found
+
+
+      # -------------------------
+      # VAULT (HA MODE)
+      # -------------------------
+      - name: Install Vault
+        run: |
+          VALUES="helm/vault/values.${ENVIRONMENT}.yaml"
+          echo "Using values file: $VALUES"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install vault hashicorp/vault \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            -f "$VALUES" \
+            --wait
+
+      - name: Initialize and Unseal Vault
+        id: init-vault
+        run: |
+          NAMESPACE=platform-security
+
+          echo "Waiting for Vault pod..."
+          kubectl wait pod -l app.kubernetes.io/name=vault \
+            -n $NAMESPACE \
+            --for=condition=Ready \
+            --timeout=180s
+
+          POD=$(kubectl get pod -n $NAMESPACE -l app.kubernetes.io/name=vault -o jsonpath="{.items[0].metadata.name}")
+          POD_IP=$(kubectl get pod -n $NAMESPACE $POD -o jsonpath="{.status.podIP}")
+
+          echo "Vault pod: $POD (IP: $POD_IP)"
+
+          echo "Initializing Vault..."
+          kubectl exec -n $NAMESPACE $POD -- \
+            sh -c "vault operator init -key-shares=1 -key-threshold=1 -format=json" \
+            > vault-init.json
+
+          UNSEAL_KEY=$(jq -r .unseal_keys_b64[0] vault-init.json)
+          ROOT_TOKEN=$(jq -r .root_token vault-init.json)
+
+          echo "Unsealing Vault using explicit VAULT_ADDR..."
+          kubectl exec -n $NAMESPACE $POD -- \
+            sh -c "VAULT_ADDR=http://$POD_IP:8200 vault operator unseal '$UNSEAL_KEY'"
+
+          echo "Storing Vault credentials in Kubernetes secret..."
+          kubectl create secret generic vault-credentials \
+            --from-literal=root_token="$ROOT_TOKEN" \
+            --from-literal=unseal_key="$UNSEAL_KEY" \
+            -n $NAMESPACE \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "Vault initialized and unsealed successfully."
+
+
+      # -------------------------
+      # CONSUL (CLUSTERED)
+      # -------------------------
+      - name: Install Consul
+        run: |
+          VALUES="helm/consul/values.${ENVIRONMENT}.yaml"
+          echo "Using values file: $VALUES"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install consul hashicorp/consul \
+            --namespace platform-security \
+            --create-namespace \
+            -f "$VALUES" \
+            --wait
+
+      # -------------------------
+      # KEYCLOAK (MULTI-REPLICA)
+      # -------------------------
+      - name: Install Keycloak
+        run: |
+          VALUES="helm/keycloak/values.${ENVIRONMENT}.yaml"
+          echo "Using values file: $VALUES"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install keycloak codecentric/keycloak \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            -f "$VALUES" \
+            --wait
+
+      # -------------------------
+      # PDB WRAPPER CHART
+      # -------------------------
+      - name: Install PDB wrapper chart
+        run: |
+          VALUES="helm/pdb-security/values.${ENVIRONMENT}.yaml"
+          echo "Using values file: $VALUES"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install pdb-security ./helm/pdb-security \
+            --namespace "$NAMESPACE" \
+            -f "$VALUES" \
+            --wait
+
+      # -------------------------
+      # DATABASE DEFINITIONS
+      # -------------------------
+      - name: Apply Database CRDs
+        run: |
+          kubectl apply -f k8s/databases/
+
+      # -------------------------
+      # WAIT FOR DATABASES (REAL CLUSTERS ONLY)
+      # -------------------------
+      - name: Wait for Databases (skip on WSL2)
+        if: env.WSL2 == 'false'
+        run: |
+          kubectl wait --for=condition=Ready database --all -n platform-apps --timeout=120s

@@ -1,0 +1,46 @@
+namespace: platform-security
+
+global:
+  enabled: true
+
+server:
+  ha:
+    enabled: true
+    replicas: 3
+
+  # Integrated Storage (Raft)
+  haStorage:
+    raft:
+      path: /vault/data
+      # Vault automatically sets node_id per pod, so this is safe
+      # If you want explicit IDs, you can override via extraEnvironmentVars
+      # node_id: vault-0
+
+  # Persistent storage for Raft data
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: "local-path"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  service:
+    type: ClusterIP
+
+injector:
+  enabled: true
+  replicas: 2
+
+mesh:
+  enabled: false
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true

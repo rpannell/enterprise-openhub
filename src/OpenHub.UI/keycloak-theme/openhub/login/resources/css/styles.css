@@ -1,0 +1,155 @@
+/*
+ * OpenHub — Keycloak login theme
+ * Palette matches the React app: accent indigo #4A47C7, amber highlight #F2A93B.
+ *
+ * Plain CSS, no build step, no JS — overriding the classes and PatternFly
+ * CSS variables Keycloak's default login theme (parent=keycloak) uses.
+ * If your Keycloak version renders different markup, open devtools on the
+ * login page and adjust the selectors to match what you see.
+ *
+ * Dark mode follows the OS/browser preference (prefers-color-scheme) —
+ * there's no toggle here, since nobody's logged in yet to remember one for.
+ *
+ * Optional: load Space Grotesk/Inter from Google Fonts to match the app
+ * exactly. Commented out by default since this is a login page — some
+ * orgs prefer not to load third-party fonts here. Uncomment to enable,
+ * or self-host the font files instead.
+ */
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap'); */
+
+:root {
+  --pf-global--primary-color--100: #4a47c7;
+  --pf-global--primary-color--200: #3a37a0;
+  --pf-global--link--Color: #4a47c7;
+  --pf-global--link--Color--hover: #3a37a0;
+  --pf-global--FontFamily--sans-serif: "Space Grotesk", "Inter", system-ui,
+    -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body.login-pf {
+  background: #f1f1f9;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body.login-pf::before {
+  background-image: none !important;
+}
+
+/* Swap the realm display name text for the OpenHub logo image */
+#kc-header-wrapper {
+  background-image: url("../img/logo-light.svg");
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: contain;
+  height: 40px;
+  width: 200px;
+  margin: 0 auto 1.5rem;
+  color: transparent;
+  font-size: 0;
+  overflow: hidden;
+}
+
+.login-pf-page .card-pf {
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  border: 1px solid #e2e8f0;
+  padding: 2rem;
+}
+
+#kc-page-title {
+  color: #14171f;
+  font-weight: 600;
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+}
+
+label,
+.control-label {
+  color: #334155;
+  font-weight: 500;
+}
+
+.form-control {
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+}
+
+.form-control:focus {
+  border-color: #4a47c7;
+  box-shadow: 0 0 0 3px rgba(74, 71, 199, 0.15);
+}
+
+.btn-primary {
+  background-color: #4a47c7;
+  border-color: #4a47c7;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: #3a37a0;
+  border-color: #3a37a0;
+}
+
+#kc-info-wrapper,
+#kc-registration {
+  color: #64748b;
+}
+
+a {
+  color: #4a47c7;
+}
+
+a:hover {
+  color: #3a37a0;
+}
+
+/* ---------- Dark mode (follows OS preference) ---------- */
+@media (prefers-color-scheme: dark) {
+  body.login-pf {
+    background: #0d1117;
+  }
+
+  #kc-header-wrapper {
+    background-image: url("../img/logo-dark.svg");
+  }
+
+  #kc-page-title {
+    color: #e6edf3;
+  }
+
+  .login-pf-page .card-pf {
+    background-color: #161b22;
+    border-color: #30363d;
+    color: #e6edf3;
+  }
+
+  label,
+  .control-label {
+    color: #c9d1d9;
+  }
+
+  .form-control {
+    background-color: #0d1117;
+    border-color: #30363d;
+    color: #e6edf3;
+  }
+
+  .form-control::placeholder {
+    color: #6e7681;
+  }
+
+  #kc-info-wrapper,
+  #kc-registration,
+  #kc-registration a {
+    color: #8b949e;
+  }
+
+  a {
+    color: #8b85f5;
+  }
+
+  a:hover {
+    color: #a39dfa;
+  }
+}
