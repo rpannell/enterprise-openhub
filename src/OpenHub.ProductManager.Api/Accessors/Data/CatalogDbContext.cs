@@ -1,0 +1,17 @@
+using Microsoft.EntityFrameworkCore;
+using OpenHub.ProductManager.Api.Models.Entities;
+
+namespace OpenHub.ProductManager.Api.Accessors.Data;
+
+public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbContext(options)
+{
+    public DbSet<TenantEntity> Tenants => Set<TenantEntity>();
+    public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<ProductEntity> Products => Set<ProductEntity>();
+    public DbSet<ProductPriceEntity> ProductPrices => Set<ProductPriceEntity>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CatalogDbContext).Assembly);
+    }
+}

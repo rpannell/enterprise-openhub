@@ -27,6 +27,8 @@ coverage/
 # Aspire user secrets / local overrides
 **/appsettings.*.local.json
 **/Properties/launchSettings.json
+# Exception: API projects need launchSettings committed so Aspire can discover their endpoints
+!src/OpenHub.ProductManager.Api/Properties/launchSettings.json
 
 # ── React / Node ─────────────────────────────────────────────────────────────
 
