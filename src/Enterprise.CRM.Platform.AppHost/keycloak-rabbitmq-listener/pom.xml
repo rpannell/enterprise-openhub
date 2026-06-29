@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example.keycloak</groupId>
+    <artifactId>rabbitmq-event-listener</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!--
+          IMPORTANT: this must match the Keycloak version your container is running.
+          Check the image tag Aspire's AddKeycloak is pulling (or run
+          `docker images` after `aspire run` once) and set this to match.
+        -->
+        <keycloak.version>26.0.7</keycloak.version>
+    </properties>
+
+    <dependencies>
+        <!--
+          These are APIs that Keycloak itself provides at runtime.
+          "provided" scope means: needed to compile against, but don't bundle
+          it in our jar — the server already has it.
+        -->
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-server-spi</artifactId>
+            <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-server-spi-private</artifactId>
+            <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-core</artifactId>
+            <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <!--
+              This provides org.jboss.logging.Logger, used for all the
+              log.info/log.error/log.warn calls in our classes. Keycloak
+              ships this on its own classpath at runtime, but Maven needs
+              it declared here just to compile against it.
+            -->
+            <groupId>org.jboss.logging</groupId>
+            <artifactId>jboss-logging</artifactId>
+            <version>3.5.3.Final</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!--
+          The actual RabbitMQ client. Keycloak does NOT ship this, so we
+          need to bundle it into our jar (see shade plugin below).
+        -->
+        <dependency>
+            <groupId>com.rabbitmq</groupId>
+            <artifactId>amqp-client</artifactId>
+            <version>5.21.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>rabbitmq-event-listener</finalName>
+        <plugins>
+            <!--
+              The shade plugin builds a "fat jar": our code plus the
+              RabbitMQ client classes, all in one file. Without this,
+              Keycloak would load our jar but crash with
+              ClassNotFoundException for the RabbitMQ classes.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

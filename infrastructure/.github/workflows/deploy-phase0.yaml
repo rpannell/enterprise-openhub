@@ -1,4 +1,4 @@
-name: phase0-observability
+name: phase0-foundation-deployment
 
 on:
   workflow_dispatch:
@@ -21,15 +21,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect WSL2
+        run: |
+          if uname -r | grep -qi "microsoft"; then
+            echo "WSL2=true" >> $GITHUB_ENV
+          else
+            echo "WSL2=false" >> $GITHUB_ENV
+          fi
+
+
       # -----------------------------
       # RESOLVE ENVIRONMENT VARIABLE
       # -----------------------------
       - name: Resolve ENVIRONMENT
         run: |
-          # Prefer workflow_dispatch input
           if [ -n "${{ github.event.inputs.environment }}" ]; then
             echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
-          # Fallback to ACT-provided env var
           elif [ -n "$ENVIRONMENT" ]; then
             echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
           else
@@ -46,10 +53,14 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      # -------------------------
+      # ADD HELM REPOSITORIES
+      # -------------------------
       - name: Add Helm Repos
         run: |
           helm repo add jetstack https://charts.jetstack.io
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add cnpg https://cloudnative-pg.github.io/charts
           helm repo update
 
       # -------------------------
@@ -81,6 +92,79 @@ jobs:
             --create-namespace \
             -f "$VALUES" \
             --wait
+
+      - name: Wait for cert-manager webhook to be ready
+        run: |
+          kubectl rollout status deployment/cert-manager-webhook \
+            -n platform-system --timeout=120s
+
+      - name: Wait for cert-manager controller to be ready
+        run: |
+          kubectl rollout status deployment/cert-manager \
+            -n platform-system --timeout=120s
+
+      - name: Wait for cert-manager cainjector to be ready
+        run: |
+          kubectl rollout status deployment/cert-manager-cainjector \
+            -n platform-system --timeout=120s
+
+
+      # --------------------------------------
+      # CLOUDNATIVEPG OPERATOR
+      # --------------------------------------
+      - name: Install CloudNativePG Operator
+        if: env.WSL2 == 'false'
+        run: |
+          VALUES="helm/cnpg/values.${ENVIRONMENT}.yaml"
+          NAMESPACE=$(yq '.namespace' "$VALUES")
+
+          helm upgrade --install cnpg cnpg/cloudnative-pg \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            -f "$VALUES" \
+            --wait
+
+      - name: Remove CNPG webhooks (WSL2)
+        if: env.WSL2 == 'true'
+        run: |
+          kubectl delete mutatingwebhookconfiguration cnpg-mutating-webhook-configuration --ignore-not-found
+          kubectl delete validatingwebhookconfiguration cnpg-validating-webhook-configuration --ignore-not-found
+
+      - name: Install Fake CNPG Operator (WSL2)
+        if: env.WSL2 == 'true'
+        run: |
+          kubectl create namespace platform-system --dry-run=client -o yaml | kubectl apply -f -
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: cnpg-cloudnative-pg
+            namespace: platform-system
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: cnpg-fake
+            template:
+              metadata:
+                labels:
+                  app: cnpg-fake
+              spec:
+                containers:
+                  - name: fake
+                    image: busybox
+                    command: ["sleep", "3600"]
+          EOF
+
+
+
+      # --------------------------------------
+      # POSTGRESQL CLUSTER (platform-db)
+      # --------------------------------------
+      - name: Apply PostgreSQL Cluster
+        run: |
+          kubectl apply -f k8s/postgres/platform-db.yaml
 
       # --------------------------------------
       # PDB WRAPPER CHART

@@ -1,0 +1,13 @@
+namespace: platform-security
+
+vault:
+  enabled: true
+  minAvailable: 2
+
+consul:
+  enabled: true
+  minAvailable: 2
+
+keycloak:
+  enabled: true
+  minAvailable: 1
