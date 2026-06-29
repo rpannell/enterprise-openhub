@@ -1,0 +1,43 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using OpenHub.ProductManager.Api.Accessors.Data;
+using OpenHub.ProductManager.Api.Accessors.Interfaces;
+using OpenHub.ProductManager.Api.Models.Entities;
+
+namespace OpenHub.ProductManager.Api.Accessors;
+
+public class ProductPriceAccessor(CatalogDbContext db, IHttpContextAccessor http) : IProductPriceAccessor
+{
+    private async Task SetTenantContextAsync(CancellationToken ct)
+    {
+        var tenantId = http.HttpContext?.Items["TenantId"] as Guid?
+            ?? throw new InvalidOperationException("Tenant context not set.");
+
+        await db.Database.ExecuteSqlRawAsync(
+            "SET LOCAL app.current_tenant_id = {0}", [tenantId.ToString()], ct);
+    }
+
+    public async Task<IReadOnlyList<ProductPriceEntity>> GetActiveByProductIdAsync(Guid productId, CancellationToken ct = default)
+    {
+        await SetTenantContextAsync(ct);
+        return await db.ProductPrices.AsNoTracking()
+            .Where(p => p.ProductId == productId && p.IsActive)
+            .OrderBy(p => p.EffectiveFrom)
+            .ToListAsync(ct);
+    }
+
+    public async Task<ProductPriceEntity> SaveAsync(ProductPriceEntity entity, CancellationToken ct = default)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await SetTenantContextAsync(ct);
+
+        if (entity.Id == Guid.Empty)
+            db.ProductPrices.Add(entity);
+        else
+            db.ProductPrices.Update(entity);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return entity;
+    }
+}
