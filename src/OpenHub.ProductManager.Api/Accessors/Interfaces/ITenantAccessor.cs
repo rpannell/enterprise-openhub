@@ -1,8 +1,8 @@
-using OpenHub.ProductManager.Api.Models.Dtos;
+using OpenHub.ProductManager.Api.Managers.Models;
 
 namespace OpenHub.ProductManager.Api.Accessors.Interfaces;
 
 public interface ITenantAccessor
 {
-    Task<TenantDto?> GetBySlugAsync(string slug, CancellationToken ct = default);
+    Task<TenantDto?> GetOrProvisionAsync(Guid tenantId, string realmSlug, CancellationToken ct = default);
 }

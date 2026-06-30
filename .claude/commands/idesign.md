@@ -6,67 +6,103 @@ Scaffold or validate iDesign-compliant code for the OpenHub platform.
 
 | Layer | Folder | Model suffix | Rule |
 |---|---|---|---|
-| Controllers | `Controllers/` | `XYZ` | Calls Managers only. All IDs are `Guid`. Route constraint: `{id:guid}` |
+| Controllers | `Controllers/` | — | Calls Managers only. All IDs are `Guid`. Route constraint: `{id:guid}` |
 | Managers | `Managers/` | `XYZDto` | Orchestrates: calls Accessors to fetch data, passes it into Engines. **Never calls other Managers** |
-| Engines | `Engines/` | `XYZDto` | **Pure logic only.** All data arrives as method parameters. **Never calls Accessors or Managers.** No constructor dependencies on infrastructure. Fully unit-testable with no mocks |
+| Engines | `Managers/Engines/` | `XYZDto` | **Pure logic only.** All data arrives as method parameters. **Never calls Accessors or Managers.** No constructor dependencies on infrastructure. Fully unit-testable with no mocks |
 | Accessors | `Accessors/` | `XYZEntity` | All external I/O: EF Core (DB), HybridCache (Redis), other APIs |
+
+## Model Locations (by layer)
+
+Each layer owns its models — self-contained so the layer can be extracted to its own DLL:
+
+| Layer | Model location | Namespace |
+|---|---|---|
+| Controllers | `Models/Requests/`, `Models/Responses/V1/` | `...Models.Requests`, `...Models.Responses.V1` |
+| Managers + Engines | `Managers/Models/` | `...Managers.Models` |
+| Accessors | `Accessors/Models/` | `...Accessors.Models` |
 
 **Mapping:** Mapperly (`Riok.Mapperly`) only. No AutoMapper. No manual property assignment.
 
-**Naming conventions:**
+## API Versioning
+
+**All controllers must be versioned starting at V1.** Use `Asp.Versioning.Http`:
+
+```csharp
+var versionSet = app.NewApiVersionSet()
+    .HasApiVersion(new ApiVersion(1))
+    .ReportApiVersions()
+    .Build();
+
+var group = app.MapGroup("/api/v{version:apiVersion}/products")
+    .WithApiVersionSet(versionSet)
+    .RequireAuthorization();
+```
+
+**Response models must be versioned** so adding V2 never breaks V1 consumers:
+- `Models/Responses/V1/ProductResponse.cs` — namespace `...Models.Responses.V1`
+- When adding V2: create `Models/Responses/V2/ProductResponse.cs` — never modify V1
+
+Requests do **not** need versioning (input changes are handled via optional fields).
+
+## Naming Conventions
+
 - SQL identifiers: `snake_case` (handled automatically by `UseSnakeCaseNamingConvention()`)
 - C# properties: `PascalCase`
 - Interfaces: `IXxxManager`, `IXxxEngine`, `IXxxAccessor`
 
 ## Scaffold Mode
 
-When the user types `/idesign scaffold <EntityName>`, generate all layers for that entity:
+When the user types `/idesign scaffold <EntityName>`, generate all layers for that entity.
+After scaffolding, apply `/platform` rules: OpenAPI docs, validation filters, and response codes.
 
 ### Files to create
 
 ```
 Controllers/
-  <Entity>Controller.cs          ← MapGet/MapPost/etc., calls I<Entity>Manager, uses Guid IDs
+  <Entity>Endpoints.cs           ← MapGet/MapPost/etc., calls I<Entity>Manager, uses Guid IDs
+
+Models/                          ← Controller layer only
+  Requests/
+    Create<Entity>Request.cs
+    Update<Entity>Request.cs
+  Responses/V1/
+    <Entity>Response.cs
 
 Managers/
   Interfaces/
     I<Entity>Manager.cs
-  <Entity>Manager.cs             ← calls Accessors, passes data to Engines
-
-Engines/
-  Interfaces/
-    I<Entity>Engine.cs
-  <Entity>Engine.cs              ← pure methods, all inputs as parameters
+  Models/                        ← Manager + Engine layer (XxxDto)
+    <Entity>Dto.cs
+  Engines/
+    Interfaces/
+      I<Entity>Engine.cs
+    <Entity>Engine.cs
+  <Entity>Manager.cs
 
 Accessors/
   Interfaces/
     I<Entity>Accessor.cs
-  <Entity>Accessor.cs            ← EF Core only, no ref joins
-  Data/Configuration/
-    <Entity>Configuration.cs     ← IEntityTypeConfiguration<T>
-
-Models/
-  Requests/
-    Create<Entity>Request.cs
-    Update<Entity>Request.cs
-  Responses/
-    <Entity>Response.cs
-  Dtos/
-    <Entity>Dto.cs
-  Entities/
+  Models/
     <Entity>Entity.cs            ← maps to Flyway schema table
+  Data/
+    Configuration/
+      <Entity>Configuration.cs
+  <Entity>Accessor.cs
 
 Mappers/
-  <Entity>Mapper.cs              ← Mapperly [Mapper] partial class
+  <Entity>Mapper.cs              ← Mapperly [Mapper] partial class; cross-layer mappings only
 ```
+
+**Note:** `CatalogDbContext.cs` is updated (add `DbSet<Entity>`), not re-created.
 
 ### Controller template
 
 ```csharp
 // All IDs: Guid. No integer IDs anywhere.
-app.MapGet("/products/{id:guid}", async (Guid id, IProductManager mgr) =>
+// Apply /platform OpenAPI rules: WithName, WithSummary, WithDescription, Produces<T>
+group.MapGet("/{id:guid}", async (Guid id, I<Entity>Manager manager, <Entity>Mapper mapper, CancellationToken ct) =>
 {
-    var dto = await mgr.GetByIdAsync(id);
+    var dto = await manager.GetByIdAsync(id, ct);
     return dto is null ? Results.NotFound() : Results.Ok(mapper.ToResponse(dto));
 });
 ```
@@ -74,24 +110,23 @@ app.MapGet("/products/{id:guid}", async (Guid id, IProductManager mgr) =>
 ### Manager template
 
 ```csharp
-public class ProductManager(
-    IProductAccessor productAccessor,
+public class <Entity>Manager(
+    I<Entity>Accessor accessor,
     ILookupCacheAccessor lookupCache,
-    IProductEngine productEngine,
-    ProductMapper mapper) : IProductManager
+    I<Entity>Engine engine,
+    <Entity>Mapper mapper) : I<Entity>Manager
 {
-    public async Task<ProductDto?> GetByIdAsync(Guid id)
+    public async Task<<Entity>Dto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         // 1. Fetch raw entity (no joins)
-        var entity = await productAccessor.GetByIdAsync(id);
+        var entity = await accessor.GetByIdAsync(id, ct);
         if (entity is null) return null;
 
         // 2. Fetch lookup dictionaries from cache
-        var manufacturers = await lookupCache.GetManufacturersAsync();
-        var brands = await lookupCache.GetBrandsAsync();
+        var manufacturers = await lookupCache.GetManufacturersAsync(ct);
 
         // 3. Pass data to Engine — Engine has no I/O of its own
-        return productEngine.Hydrate(mapper.ToDto(entity), manufacturers, brands);
+        return engine.Hydrate(mapper.ToDto(entity), manufacturers);
     }
 }
 ```
@@ -99,18 +134,15 @@ public class ProductManager(
 ### Engine template
 
 ```csharp
-public class ProductEngine : IProductEngine
+public class <Entity>Engine : I<Entity>Engine
 {
     // Pure function — no constructor dependencies on infrastructure
-    public ProductDto Hydrate(
-        ProductDto dto,
-        IReadOnlyDictionary<Guid, ManufacturerDto> manufacturers,
-        IReadOnlyDictionary<Guid, BrandDto> brands)
+    public <Entity>Dto Hydrate(
+        <Entity>Dto dto,
+        IReadOnlyDictionary<Guid, ManufacturerDto> manufacturers)
     {
         if (dto.ManufacturerId.HasValue)
             dto.ManufacturerName = manufacturers.GetValueOrDefault(dto.ManufacturerId.Value)?.Name;
-        if (dto.BrandId.HasValue)
-            dto.BrandName = brands.GetValueOrDefault(dto.BrandId.Value)?.Name;
         return dto;
     }
 }
@@ -119,7 +151,7 @@ public class ProductEngine : IProductEngine
 ### Accessor template (EF Core, no joins)
 
 ```csharp
-public class ProductAccessor(CatalogDbContext db, IHttpContextAccessor http) : IProductAccessor
+public class <Entity>Accessor(CatalogDbContext db, IHttpContextAccessor http) : I<Entity>Accessor
 {
     private async Task SetTenantAsync()
     {
@@ -129,10 +161,10 @@ public class ProductAccessor(CatalogDbContext db, IHttpContextAccessor http) : I
             "SET LOCAL app.current_tenant_id = {0}", tenantId.ToString());
     }
 
-    public async Task<ProductEntity?> GetByIdAsync(Guid id)
+    public async Task<<Entity>Entity?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         await SetTenantAsync();
-        return await db.Products.FirstOrDefaultAsync(p => p.Id == id);
+        return await db.<Entities>.FirstOrDefaultAsync(e => e.Id == id, ct);
     }
 }
 ```
@@ -141,12 +173,11 @@ public class ProductAccessor(CatalogDbContext db, IHttpContextAccessor http) : I
 
 ```csharp
 [Mapper]
-public partial class ProductMapper
+public partial class <Entity>Mapper
 {
-    public partial ProductDto ToDto(ProductEntity entity);
-    public partial ProductEntity ToEntity(ProductDto dto);
-    public partial ProductResponse ToResponse(ProductDto dto);
-    public partial ProductDto ToDto(CreateProductRequest request);
+    public partial <Entity>Dto ToDto(<Entity>Entity entity);
+    public partial <Entity>Response ToResponse(<Entity>Dto dto);
+    public partial <Entity>Dto ToDto(Create<Entity>Request request);
 }
 ```
 
@@ -154,33 +185,28 @@ public partial class ProductMapper
 
 ```csharp
 // EF Core maps PascalCase → snake_case automatically via UseSnakeCaseNamingConvention()
-public class ProductEntity
+public class <Entity>Entity
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
-    public string Sku { get; set; } = null!;
     public string Name { get; set; } = null!;
-    public Guid? ManufacturerId { get; set; }
-    public Guid? BrandId { get; set; }
-    // ... other columns matching catalog.products schema
+    public bool IsActive { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
 }
 ```
 
-### Configuration template
+### EF Configuration template
 
 ```csharp
-public class ProductConfiguration : IEntityTypeConfiguration<ProductEntity>
+public class <Entity>Configuration : IEntityTypeConfiguration<<Entity>Entity>
 {
-    public void Configure(EntityTypeBuilder<ProductEntity> builder)
+    public void Configure(EntityTypeBuilder<<Entity>Entity> builder)
     {
-        builder.ToTable("products", "catalog");
-        builder.HasKey(p => p.Id);
-        builder.HasQueryFilter(p => p.DeletedAt == null);
-        // NpgsqlRange for sys_period:
-        builder.Property(p => p.SysPeriod).HasColumnType("tstzrange");
+        builder.ToTable("<table>", "catalog");
+        builder.HasKey(e => e.Id);
+        builder.HasQueryFilter(e => e.DeletedAt == null);
     }
 }
 ```
@@ -201,19 +227,52 @@ Report each violation with file path and line number.
 
 ## Lookup Cache Pattern
 
-All `ref.*` table data is served from `ILookupCacheAccessor` via HybridCache:
+Platform-wide `ref.*` table data (shared across all tenants) is served from `ILookupCacheAccessor` via HybridCache:
 - L1: in-process memory, 5-minute TTL
 - L2: Redis, 1-hour TTL
-- Never query `ref.*` tables directly in product queries — always use the cache dictionaries
+- Never query `ref.*` tables directly in domain queries — always use the cache dictionaries
 - To invalidate: `await cache.RemoveAsync("ref:<table>")`
 
-Available lookup methods:
-- `GetManufacturersAsync()` → `IReadOnlyDictionary<Guid, ManufacturerDto>`
-- `GetBrandsAsync()` → `IReadOnlyDictionary<Guid, BrandDto>`
-- `GetCategoriesAsync()` → `IReadOnlyDictionary<Guid, CategoryDto>`
-- `GetConditionTypesAsync()` → `IReadOnlyDictionary<Guid, ConditionTypeDto>`
-- `GetPriceTypesAsync()` → `IReadOnlyDictionary<Guid, PriceTypeDto>`
-- `GetAvailabilityStatusesAsync()` → `IReadOnlyDictionary<Guid, AvailabilityStatusDto>`
-- `GetUnitsOfMeasureAsync()` → `IReadOnlyDictionary<Guid, UnitOfMeasureDto>`
-- `GetCurrenciesAsync()` → `IReadOnlyDictionary<Guid, CurrencyDto>`
-- `GetAttributeDefinitionsAsync()` → `IReadOnlyDictionary<Guid, AttributeDefinitionDto>`
+Available lookup methods (dictionaries, keyed by `Guid` id — used for hydrating other entities):
+- `GetConditionTypeNamesAsync()` → `IReadOnlyDictionary<Guid, string>`
+- `GetAvailabilityStatusNamesAsync()` → `IReadOnlyDictionary<Guid, string>`
+- `GetPriceTypeNamesAsync()` → `IReadOnlyDictionary<Guid, string>`
+- `GetCurrencyCodesAsync()` → `IReadOnlyDictionary<Guid, string>`
+- `GetUomCodesAsync()` → `IReadOnlyDictionary<Guid, string>`
+
+List-shaped variants for lookup/picklist endpoints (e.g. `GET /api/v1/lookups`):
+- `GetConditionTypesAsync()`, `GetAvailabilityStatusesAsync()`, `GetPriceTypesAsync()` → `IReadOnlyList<LookupItemRow>`
+- `GetCurrenciesAsync()` → `IReadOnlyList<CurrencyLookupRow>`
+- `GetUnitsOfMeasureAsync()` → `IReadOnlyList<UomLookupRow>`
+
+### Tenant-specific lookups
+
+Data that each tenant manages independently (e.g. `catalog.manufacturers`, `catalog.brands`) does **not** belong in `ILookupCacheAccessor` — it lives in `catalog.*` tables with RLS, not `ref.*`. Use a dedicated accessor instead, e.g. `ICatalogLookupAccessor`:
+- `GetManufacturersAsync()` → `IReadOnlyList<ManufacturerEntity>`
+- `GetBrandsAsync()` → `IReadOnlyList<BrandEntity>`
+
+Same HybridCache pattern, but cache keys are tenant-scoped: `catalog:<table>:tenant:{tenantId}` (vs. the global `ref:<table>` / `ref:<table>:list` keys). Tenant id is read from `HttpContext.Items["TenantId"]` via `IHttpContextAccessor`, and the same `SET LOCAL app.current_tenant_id` RLS pattern applies.
+
+## DI Registration Pattern
+
+Each layer registers its own services via a static `Add<Layer>()` extension method, kept in a `Setup/` subfolder so it doesn't clutter the layer's implementation files:
+
+```
+Accessors/Setup/AccessorServiceExtensions.cs   → AddAccessors()
+Managers/Setup/ManagerServiceExtensions.cs     → AddManagers()
+Managers/Engines/Setup/EngineServiceExtensions.cs → AddEngines()
+Mappers/Setup/MapperServiceExtensions.cs       → AddMappers()
+```
+
+Namespace matches folder (e.g. `...Accessors.Setup`). `Program.cs` only calls these four methods — it never registers a layer's services directly:
+
+```csharp
+builder.Services.AddAccessors();
+builder.Services.AddEngines();
+builder.Services.AddManagers();
+builder.Services.AddMappers();
+```
+
+**Not a service-factory pattern** — these are plain `IServiceCollection` extension methods using standard `AddScoped`/`AddTransient`/`AddSingleton` calls, the same idiom as `AddControllers()` or `AddAuthorization()`. This keeps each layer self-contained (consistent with the "Model Locations" section above) so a layer's DI wiring travels with it if it's ever extracted to its own DLL.
+
+When scaffolding a new entity, add its registrations to the relevant `Add<Layer>()` method instead of touching `Program.cs`.

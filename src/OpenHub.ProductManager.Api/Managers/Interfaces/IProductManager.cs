@@ -1,4 +1,4 @@
-using OpenHub.ProductManager.Api.Models.Dtos;
+using OpenHub.ProductManager.Api.Managers.Models;
 using OpenHub.ProductManager.Api.Models.Requests;
 
 namespace OpenHub.ProductManager.Api.Managers.Interfaces;

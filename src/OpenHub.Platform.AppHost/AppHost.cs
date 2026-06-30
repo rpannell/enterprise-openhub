@@ -96,6 +96,13 @@ var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>(
     .WithHttpHealthCheck("/health")
     .WithReference(catalogDb)
     .WithReference(redis)
-    .WaitFor(flyway);
+    .WithReference(keycloak)
+    .WithEnvironment("KeyCloak__AdminUsername", "admin")
+    .WithEnvironment("KeyCloak__AdminPassword", keycloakAdminPassword)
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    .WaitFor(flyway)
+    .WaitFor(keycloak);
 
 builder.Build().Run();

@@ -1,8 +1,8 @@
 using OpenHub.ProductManager.Api.Accessors.Interfaces;
-using OpenHub.ProductManager.Api.Engines.Interfaces;
+using OpenHub.ProductManager.Api.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Interfaces;
+using OpenHub.ProductManager.Api.Managers.Models;
 using OpenHub.ProductManager.Api.Mappers;
-using OpenHub.ProductManager.Api.Models.Dtos;
 using OpenHub.ProductManager.Api.Models.Requests;
 
 namespace OpenHub.ProductManager.Api.Managers;
@@ -11,24 +11,22 @@ public class ProductManager(
     IProductAccessor productAccessor,
     IProductPriceAccessor priceAccessor,
     ILookupCacheAccessor lookupCache,
+    ICatalogLookupAccessor catalogLookup,
     IProductEngine productEngine,
     IProductPricingEngine pricingEngine,
     ProductMapper mapper) : IProductManager
 {
     public async Task<IReadOnlyList<ProductDto>> GetAllAsync(CancellationToken ct = default)
     {
-        // 1. Fetch from DB — single-table, no joins
         var entities = await productAccessor.GetAllAsync(ct);
         var dtos = mapper.ToDtoList(entities);
 
-        // 2. Fetch lookup dictionaries from HybridCache
-        var manufacturers = await lookupCache.GetManufacturerNamesAsync(ct);
-        var brands = await lookupCache.GetBrandNamesAsync(ct);
+        var manufacturers = await GetManufacturerNamesAsync(ct);
+        var brands = await GetBrandNamesAsync(ct);
         var conditions = await lookupCache.GetConditionTypeNamesAsync(ct);
         var statuses = await lookupCache.GetAvailabilityStatusNamesAsync(ct);
         var uoms = await lookupCache.GetUomCodesAsync(ct);
 
-        // 3. Engine hydrates — pure in-memory join, no I/O
         return productEngine.HydrateAll(dtos, manufacturers, brands, conditions, statuses, uoms);
     }
 
@@ -39,15 +37,14 @@ public class ProductManager(
 
         var dto = mapper.ToDto(entity);
 
-        var manufacturers = await lookupCache.GetManufacturerNamesAsync(ct);
-        var brands = await lookupCache.GetBrandNamesAsync(ct);
+        var manufacturers = await GetManufacturerNamesAsync(ct);
+        var brands = await GetBrandNamesAsync(ct);
         var conditions = await lookupCache.GetConditionTypeNamesAsync(ct);
         var statuses = await lookupCache.GetAvailabilityStatusNamesAsync(ct);
         var uoms = await lookupCache.GetUomCodesAsync(ct);
 
         productEngine.Hydrate(dto, manufacturers, brands, conditions, statuses, uoms);
 
-        // Fetch and hydrate prices
         var priceEntities = await priceAccessor.GetActiveByProductIdAsync(id, ct);
         var priceDtos = mapper.ToDtoPriceList(priceEntities);
         var priceTypes = await lookupCache.GetPriceTypeNamesAsync(ct);
@@ -74,7 +71,6 @@ public class ProductManager(
         var existing = await productAccessor.GetByIdAsync(id, ct);
         if (existing is null) return null;
 
-        // Apply non-null fields from request
         if (request.Name is not null) existing.Name = request.Name;
         if (request.Description is not null) existing.Description = request.Description;
         if (request.ShortDescription is not null) existing.ShortDescription = request.ShortDescription;
@@ -101,4 +97,10 @@ public class ProductManager(
         await productAccessor.SoftDeleteAsync(id, deleteUserId, ct);
         return true;
     }
+
+    private async Task<IReadOnlyDictionary<Guid, string>> GetManufacturerNamesAsync(CancellationToken ct)
+        => (await catalogLookup.GetManufacturersAsync(ct)).ToDictionary(m => m.Id, m => m.Name);
+
+    private async Task<IReadOnlyDictionary<Guid, string>> GetBrandNamesAsync(CancellationToken ct)
+        => (await catalogLookup.GetBrandsAsync(ct)).ToDictionary(b => b.Id, b => b.Name);
 }

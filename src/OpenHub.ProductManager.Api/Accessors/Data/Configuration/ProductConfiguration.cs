@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using NpgsqlTypes;
-using OpenHub.ProductManager.Api.Models.Entities;
+using OpenHub.ProductManager.Api.Accessors.Models;
 
 namespace OpenHub.ProductManager.Api.Accessors.Data.Configuration;
 

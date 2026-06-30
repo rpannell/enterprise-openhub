@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using OpenHub.ProductManager.Api.Accessors.Data;
 using OpenHub.ProductManager.Api.Accessors.Interfaces;
-using OpenHub.ProductManager.Api.Models.Entities;
+using OpenHub.ProductManager.Api.Accessors.Models;
 
 namespace OpenHub.ProductManager.Api.Accessors;
 
