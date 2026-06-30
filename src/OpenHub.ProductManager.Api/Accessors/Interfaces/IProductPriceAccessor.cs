@@ -1,4 +1,4 @@
-using OpenHub.ProductManager.Api.Models.Entities;
+using OpenHub.ProductManager.Api.Accessors.Models;
 
 namespace OpenHub.ProductManager.Api.Accessors.Interfaces;
 

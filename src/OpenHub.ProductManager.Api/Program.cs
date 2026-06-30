@@ -1,19 +1,30 @@
+using Asp.Versioning;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.JsonWebTokens;
-using OpenHub.ProductManager.Api.Accessors;
+using OpenHub.Accessor.KeyCloak.Extensions;
 using OpenHub.ProductManager.Api.Accessors.Data;
-using OpenHub.ProductManager.Api.Accessors.Interfaces;
-using OpenHub.ProductManager.Api.Engines;
-using OpenHub.ProductManager.Api.Engines.Interfaces;
-using OpenHub.ProductManager.Api.Managers;
-using OpenHub.ProductManager.Api.Managers.Interfaces;
-using OpenHub.ProductManager.Api.Mappers;
+using OpenHub.ProductManager.Api.Accessors.Setup;
 using OpenHub.ProductManager.Api.Controllers;
+using OpenHub.ProductManager.Api.Managers.Engines.Setup;
+using OpenHub.ProductManager.Api.Managers.Setup;
+using OpenHub.ProductManager.Api.Mappers.Setup;
 using OpenHub.ProductManager.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Platform defaults (OpenTelemetry, health checks, service discovery, CORS) ─
 builder.AddServiceDefaults();
+
+// ── External configuration — system-wide first, service-specific second ───────
+// Skipped silently if Consul:Url or Vault:Address env vars are not set.
+builder.AddConsulConfiguration(
+    "platform/config",           // system-wide: logging levels, Keycloak URLs, feature flags
+    "product-manager/config");   // service-specific overrides
+
+builder.AddVaultSecrets(
+    "platform",                  // system-wide secrets: shared creds, signing keys
+    "product-manager");          // service-specific secrets: DB passwords, API keys
 
 // ── Database ─────────────────────────────────────────────────────────────────
 builder.AddNpgsqlDbContext<CatalogDbContext>("catalog");
@@ -22,13 +33,36 @@ builder.AddNpgsqlDbContext<CatalogDbContext>("catalog");
 builder.AddRedisDistributedCache("redis");
 builder.Services.AddHybridCache();
 
+// ── Health checks — infrastructure dependencies ───────────────────────────────
+// DB and Redis health checks are registered automatically by the Aspire integrations above.
+// Keycloak readiness check: reads URL from service discovery or configuration.
+var keycloakUrl = builder.Configuration["ConnectionStrings:keycloak"]
+    ?? builder.Configuration["KeyCloak:Url"];
+if (!string.IsNullOrWhiteSpace(keycloakUrl))
+{
+    builder.Services.AddHealthChecks()
+        .AddCheck("keycloak", new KeycloakHealthCheck(keycloakUrl), tags: ["ready"]);
+}
+
 // ── Authentication — multi-realm Keycloak ────────────────────────────────────
-// Each client has its own realm. The iss claim identifies which realm issued the token.
-// We resolve the authority dynamically so any registered realm is accepted.
+// Dynamic issuer: reads the `iss` claim from the raw JWT before validation and sets
+// Authority to that realm URL. This allows any tenant's realm to authenticate —
+// both interactive users (auth-code flow) and M2M callers (client credentials).
+//
+// Audience: Set Auth:Audience in config (e.g. "product-manager") to enforce that
+// only tokens explicitly targeting this API are accepted. Requires a Keycloak
+// audience mapper on every client (user and M2M) in every tenant realm.
+// Leave unset in dev to skip audience validation.
+var jwtAudience = builder.Configuration["Auth:Audience"];
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.RequireHttpsMetadata = builder.Environment.IsProduction();
+
+        if (!string.IsNullOrWhiteSpace(jwtAudience))
+            options.Audience = jwtAudience;
+
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
@@ -46,10 +80,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                         ctx.Options.TokenValidationParameters.ValidIssuer = iss;
                     }
                 }
-                catch
-                {
-                    // Malformed token — let the normal pipeline reject it
-                }
+                catch { }
 
                 return Task.CompletedTask;
             }
@@ -58,25 +89,29 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+// ── API versioning ────────────────────────────────────────────────────────────
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+});
+
+// ── Validation ────────────────────────────────────────────────────────────────
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
 // ── iDesign layer registrations ───────────────────────────────────────────────
+// Each layer owns its own DI setup via a static Add<Layer>() extension method,
+// so the layer can be extracted to its own DLL without touching Program.cs.
 builder.Services.AddHttpContextAccessor();
 
-// Accessors
-builder.Services.AddScoped<ITenantAccessor, TenantAccessor>();
-builder.Services.AddScoped<ILookupCacheAccessor, LookupCacheAccessor>();
-builder.Services.AddScoped<IProductAccessor, ProductAccessor>();
-builder.Services.AddScoped<IProductPriceAccessor, ProductPriceAccessor>();
+// Keycloak Admin API (singleton — cached token, shared HTTP client)
+builder.Services.AddKeyCloakAccessor(builder.Configuration);
 
-// Engines — transient because they are stateless pure-logic classes
-builder.Services.AddTransient<IProductEngine, ProductEngine>();
-builder.Services.AddTransient<IProductPricingEngine, ProductPricingEngine>();
-
-// Managers
-builder.Services.AddScoped<IProductManager, ProductManager>();
-
-// Mappers (Mapperly source-generated, no DI overhead)
-builder.Services.AddSingleton<ProductMapper>();
-builder.Services.AddSingleton<TenantMapper>();
+builder.Services.AddAccessors();
+builder.Services.AddEngines();
+builder.Services.AddManagers();
+builder.Services.AddMappers();
 
 // ── API ───────────────────────────────────────────────────────────────────────
 builder.Services.AddProblemDetails();
@@ -85,19 +120,13 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 
 app.UseExceptionHandler();
-
-if (app.Environment.IsDevelopment())
-    app.MapOpenApi();
-
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Resolves tenant UUID from JWT iss claim and stores it in HttpContext.Items["TenantId"]
 app.UseMiddleware<TenantMiddleware>();
-
 app.MapDefaultEndpoints();
-
-// ── Routes ────────────────────────────────────────────────────────────────────
+app.MapOpenHubApiDocs("OpenHub Product Manager API v1");
 app.MapProductEndpoints();
+app.MapLookupEndpoints();
 
 app.Run();

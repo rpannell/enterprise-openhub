@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Platform.ServiceDef
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.ProductManager.Api", "OpenHub.ProductManager.Api\OpenHub.ProductManager.Api.csproj", "{C918C5C3-EE1B-4ADF-B076-4344512662C1}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Accessor.KeyCloak", "OpenHub.Accessor.KeyCloak\OpenHub.Accessor.KeyCloak.csproj", "{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{C918C5C3-EE1B-4ADF-B076-4344512662C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C918C5C3-EE1B-4ADF-B076-4344512662C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C918C5C3-EE1B-4ADF-B076-4344512662C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -164,9 +164,5 @@ INSERT INTO ref.categories (id, parent_id, name, slug, sort_order) VALUES
     ('b0000014-0000-0000-0000-000000000000', 'a0000003-0000-0000-0000-000000000000', 'Roofing',             'roofing',           4),
     ('b0000015-0000-0000-0000-000000000000', 'a0000003-0000-0000-0000-000000000000', 'Flooring',            'flooring',          5);
 
--- ─────────────────────────────────────────────────────────────────────────────
--- catalog.tenants  (dev seed — slugs match Keycloak realm names)
--- ─────────────────────────────────────────────────────────────────────────────
-INSERT INTO catalog.tenants (id, slug, name, plan_tier) VALUES
-    ('11111111-1111-1111-1111-111111111111', 'client-a', 'Client A Corp', 'enterprise'),
-    ('22222222-2222-2222-2222-222222222222', 'client-b', 'Client B Inc',  'standard');
+-- catalog.tenants intentionally empty — tenants are auto-provisioned on first
+-- authenticated request via the Keycloak Admin API (see TenantAccessor.GetOrProvisionAsync)

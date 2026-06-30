@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using OpenHub.ProductManager.Api.Models.Entities;
+using OpenHub.ProductManager.Api.Accessors.Models;
 
 namespace OpenHub.ProductManager.Api.Accessors.Data.Configuration;
 
@@ -13,6 +13,5 @@ public class TenantConfiguration : IEntityTypeConfiguration<TenantEntity>
         builder.Property(t => t.Slug).IsRequired();
         builder.Property(t => t.Name).IsRequired();
         builder.HasIndex(t => t.Slug).IsUnique();
-        // Tenants are not soft-deleted via query filter — admin-managed
     }
 }
