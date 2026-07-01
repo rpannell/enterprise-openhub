@@ -69,6 +69,16 @@
             "id.token.claim": "false",
             "userinfo.token.claim": "false"
           }
+        },
+        {
+          "name": "product-manager-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "product-manager-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
         }
       ]
     }

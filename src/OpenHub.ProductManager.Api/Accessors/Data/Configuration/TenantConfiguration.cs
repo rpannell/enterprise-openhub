@@ -10,8 +10,16 @@ public class TenantConfiguration : IEntityTypeConfiguration<TenantEntity>
     {
         builder.ToTable("tenants", "catalog");
         builder.HasKey(t => t.Id);
-        builder.Property(t => t.Slug).IsRequired();
-        builder.Property(t => t.Name).IsRequired();
+
+        builder.Property(t => t.Id).HasColumnName("id");
+        builder.Property(t => t.Slug).HasColumnName("slug").IsRequired();
+        builder.Property(t => t.Name).HasColumnName("name").IsRequired();
+        builder.Property(t => t.PlanTier).HasColumnName("plan_tier").IsRequired();
+        builder.Property(t => t.IsActive).HasColumnName("is_active");
+        builder.Property(t => t.CreatedAt).HasColumnName("created_at");
+        builder.Property(t => t.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(t => t.DeletedAt).HasColumnName("deleted_at");
+
         builder.HasIndex(t => t.Slug).IsUnique();
     }
 }

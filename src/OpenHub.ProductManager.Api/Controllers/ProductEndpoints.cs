@@ -59,8 +59,15 @@ public static class ProductEndpoints
             CancellationToken ct) =>
         {
             var userId = GetUserId(http);
-            var dto = await manager.CreateAsync(request, userId, ct);
-            return Results.Created($"/api/v1/products/{dto.Id}", mapper.ToResponse(dto));
+            try
+            {
+                var dto = await manager.CreateAsync(request, userId, ct);
+                return Results.Created($"/api/v1/products/{dto.Id}", mapper.ToResponse(dto));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.ValidationProblem(ResolveLookupError(ex.Message));
+            }
         })
         .WithName("CreateProduct")
         .WithSummary("Create a product")
@@ -78,10 +85,17 @@ public static class ProductEndpoints
             CancellationToken ct) =>
         {
             var userId = GetUserId(http);
-            var dto = await manager.UpdateAsync(id, request, userId, ct);
-            return dto is null
-                ? Results.NotFound()
-                : Results.Ok(mapper.ToResponse(dto));
+            try
+            {
+                var dto = await manager.UpdateAsync(id, request, userId, ct);
+                return dto is null
+                    ? Results.NotFound()
+                    : Results.Ok(mapper.ToResponse(dto));
+            }
+            catch (KeyNotFoundException ex) when (ex.Message.StartsWith("Manufacturer") || ex.Message.StartsWith("Brand"))
+            {
+                return Results.ValidationProblem(ResolveLookupError(ex.Message));
+            }
         })
         .WithName("UpdateProduct")
         .WithSummary("Update a product")
@@ -111,10 +125,12 @@ public static class ProductEndpoints
     }
 
     private static Guid GetUserId(HttpContext http)
-    {
-        var sub = http.User.FindFirst("sub")?.Value
-            ?? throw new InvalidOperationException("User sub claim missing from JWT.");
+        => http.Items["UserId"] as Guid?
+            ?? throw new InvalidOperationException("User context not set. Ensure TenantMiddleware is registered.");
 
-        return Guid.TryParse(sub, out var id) ? id : Guid.NewGuid();
+    private static Dictionary<string, string[]> ResolveLookupError(string message)
+    {
+        var field = message.StartsWith("Manufacturer") ? "Manufacturer" : "Brand";
+        return new Dictionary<string, string[]> { [field] = [message] };
     }
 }

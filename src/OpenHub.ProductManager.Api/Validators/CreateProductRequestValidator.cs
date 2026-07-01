@@ -15,6 +15,14 @@ public sealed class CreateProductRequestValidator : AbstractValidator<CreateProd
             .NotEmpty()
             .MaximumLength(500);
 
+        RuleFor(x => x.Manufacturer)
+            .NotEmpty()
+            .MaximumLength(200);
+
+        RuleFor(x => x.Brand)
+            .NotEmpty()
+            .MaximumLength(200);
+
         RuleFor(x => x.Description)
             .MaximumLength(4000)
             .When(x => x.Description is not null);

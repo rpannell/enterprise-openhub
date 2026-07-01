@@ -38,6 +38,15 @@ public partial class LookupMapper
     public partial BrandLookupItemDto ToDto(BrandEntity entity);
     public partial List<BrandLookupItemDto> ToDtoList(IReadOnlyList<BrandEntity> entities);
 
+    [MapperIgnoreSource("TenantId")]
+    [MapperIgnoreSource("ManufacturerId")]
+    [MapperIgnoreSource("LogoUrl")]
+    [MapperIgnoreSource("IsActive")]
+    [MapperIgnoreSource("CreatedAt")]
+    [MapperIgnoreSource("UpdatedAt")]
+    [MapperIgnoreSource("DeletedAt")]
+    public partial LookupItemDto ToLookupDto(BrandEntity entity);
+
     // Manager → Controller
     public partial LookupItemResponse ToResponse(LookupItemDto dto);
     public partial List<LookupItemResponse> ToResponseList(List<LookupItemDto> dtos);

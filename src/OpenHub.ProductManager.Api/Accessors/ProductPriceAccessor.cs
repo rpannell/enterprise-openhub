@@ -8,36 +8,46 @@ namespace OpenHub.ProductManager.Api.Accessors;
 
 public class ProductPriceAccessor(CatalogDbContext db, IHttpContextAccessor http) : IProductPriceAccessor
 {
-    private async Task SetTenantContextAsync(CancellationToken ct)
-    {
-        var tenantId = http.HttpContext?.Items["TenantId"] as Guid?
+    private Guid TenantId =>
+        http.HttpContext?.Items["TenantId"] as Guid?
             ?? throw new InvalidOperationException("Tenant context not set.");
 
-        await db.Database.ExecuteSqlRawAsync(
-            "SET LOCAL app.current_tenant_id = {0}", [tenantId.ToString()], ct);
-    }
+    private async Task SetTenantContextAsync(Guid tenantId, CancellationToken ct)
+        => await db.Database.ExecuteSqlRawAsync(
+            "SELECT set_config('app.current_tenant_id', {0}, true)", [tenantId.ToString()], ct);
 
     public async Task<IReadOnlyList<ProductPriceEntity>> GetActiveByProductIdAsync(Guid productId, CancellationToken ct = default)
     {
-        await SetTenantContextAsync(ct);
-        return await db.ProductPrices.AsNoTracking()
-            .Where(p => p.ProductId == productId && p.IsActive)
-            .OrderBy(p => p.EffectiveFrom)
-            .ToListAsync(ct);
+        var tenantId = TenantId;
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await SetTenantContextAsync(tenantId, ct);
+            var results = (IReadOnlyList<ProductPriceEntity>)await db.ProductPrices.AsNoTracking()
+                .Where(p => p.ProductId == productId && p.IsActive)
+                .OrderBy(p => p.EffectiveFrom)
+                .ToListAsync(ct);
+            await tx.CommitAsync(ct);
+            return results;
+        });
     }
 
     public async Task<ProductPriceEntity> SaveAsync(ProductPriceEntity entity, CancellationToken ct = default)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await SetTenantContextAsync(ct);
-
-        if (entity.Id == Guid.Empty)
-            db.ProductPrices.Add(entity);
-        else
-            db.ProductPrices.Update(entity);
-
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        var tenantId = TenantId;
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await SetTenantContextAsync(tenantId, ct);
+            if (entity.Id == Guid.Empty)
+                db.ProductPrices.Add(entity);
+            else
+                db.ProductPrices.Update(entity);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
         return entity;
     }
 }

@@ -21,7 +21,7 @@ public class CatalogLookupAccessor(CatalogDbContext db, IHttpContextAccessor htt
 
     private async Task SetTenantContextAsync(Guid tenantId, CancellationToken ct)
         => await db.Database.ExecuteSqlRawAsync(
-            "SET LOCAL app.current_tenant_id = {0}", [tenantId.ToString()], ct);
+            "SELECT set_config('app.current_tenant_id', {0}, true)", [tenantId.ToString()], ct);
 
     public ValueTask<IReadOnlyList<ManufacturerEntity>> GetManufacturersAsync(CancellationToken ct = default)
     {
@@ -30,11 +30,18 @@ public class CatalogLookupAccessor(CatalogDbContext db, IHttpContextAccessor htt
             $"catalog:manufacturers:tenant:{tenantId}",
             async _ =>
             {
-                await SetTenantContextAsync(tenantId, ct);
-                return (IReadOnlyList<ManufacturerEntity>)await db.Manufacturers.AsNoTracking()
-                    .Where(m => m.TenantId == tenantId && m.IsActive)
-                    .OrderBy(m => m.Name)
-                    .ToListAsync(ct);
+                var strategy = db.Database.CreateExecutionStrategy();
+                return await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await db.Database.BeginTransactionAsync(ct);
+                    await SetTenantContextAsync(tenantId, ct);
+                    var results = (IReadOnlyList<ManufacturerEntity>)await db.Manufacturers.AsNoTracking()
+                        .Where(m => m.TenantId == tenantId && m.IsActive)
+                        .OrderBy(m => m.Name)
+                        .ToListAsync(ct);
+                    await tx.CommitAsync(ct);
+                    return results;
+                });
             },
             CacheOptions, cancellationToken: ct);
     }
@@ -46,12 +53,69 @@ public class CatalogLookupAccessor(CatalogDbContext db, IHttpContextAccessor htt
             $"catalog:brands:tenant:{tenantId}",
             async _ =>
             {
-                await SetTenantContextAsync(tenantId, ct);
-                return (IReadOnlyList<BrandEntity>)await db.Brands.AsNoTracking()
-                    .Where(b => b.TenantId == tenantId && b.IsActive)
-                    .OrderBy(b => b.Name)
-                    .ToListAsync(ct);
+                var strategy = db.Database.CreateExecutionStrategy();
+                return await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await db.Database.BeginTransactionAsync(ct);
+                    await SetTenantContextAsync(tenantId, ct);
+                    var results = (IReadOnlyList<BrandEntity>)await db.Brands.AsNoTracking()
+                        .Where(b => b.TenantId == tenantId && b.IsActive)
+                        .OrderBy(b => b.Name)
+                        .ToListAsync(ct);
+                    await tx.CommitAsync(ct);
+                    return results;
+                });
             },
             CacheOptions, cancellationToken: ct);
+    }
+
+    public async Task<ManufacturerEntity> InsertManufacturerAsync(string name, Guid tenantId, CancellationToken ct = default)
+    {
+        ManufacturerEntity? entity = null;
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            entity = new ManufacturerEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Name = name,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await SetTenantContextAsync(tenantId, ct);
+            db.Manufacturers.Add(entity);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
+        await cache.RemoveAsync($"catalog:manufacturers:tenant:{tenantId}", ct);
+        return entity!;
+    }
+
+    public async Task<BrandEntity> InsertBrandAsync(string name, Guid tenantId, CancellationToken ct = default)
+    {
+        BrandEntity? entity = null;
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            entity = new BrandEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Name = name,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await SetTenantContextAsync(tenantId, ct);
+            db.Brands.Add(entity);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
+        await cache.RemoveAsync($"catalog:brands:tenant:{tenantId}", ct);
+        return entity!;
     }
 }

@@ -70,8 +70,12 @@ public partial class ProductMapper
     public partial ProductPriceResponse ToResponse(ProductPriceDto dto);
 
     // Controller → Manager
+    [MapperIgnoreSource("Manufacturer")]
+    [MapperIgnoreSource("Brand")]
     [MapperIgnoreTarget("Id")]
     [MapperIgnoreTarget("TenantId")]
+    [MapperIgnoreTarget("ManufacturerId")]
+    [MapperIgnoreTarget("BrandId")]
     [MapperIgnoreTarget("ManufacturerName")]
     [MapperIgnoreTarget("BrandName")]
     [MapperIgnoreTarget("ConditionTypeName")]

@@ -16,11 +16,11 @@ public class CreateProductRequest
     [Description("Brief product summary for listing views. Max 500 characters.")]
     public string? ShortDescription { get; set; }
 
-    [Description("Reference to a manufacturer owned by the caller's tenant. See GET /api/v1/lookups.")]
-    public Guid? ManufacturerId { get; set; }
+    [Description("Manufacturer name as it appears in the tenant's manufacturer catalog. Max 200 characters.")]
+    public string Manufacturer { get; set; } = null!;
 
-    [Description("Reference to a brand owned by the caller's tenant. See GET /api/v1/lookups.")]
-    public Guid? BrandId { get; set; }
+    [Description("Brand name as it appears in the tenant's brand catalog. Max 200 characters.")]
+    public string Brand { get; set; } = null!;
 
     [Description("Reference to a condition type (e.g. New, Used, Refurbished) in the ref.condition_types lookup table.")]
     public Guid? ConditionTypeId { get; set; }

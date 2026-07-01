@@ -54,6 +54,7 @@ bool.TryParse(builder.Configuration["Keycloak:UseRabbitMqListener"], out var use
 var keycloakAdminPassword = builder.AddParameter("keycloak-admin-password", secret: true);
 var keycloak =
     builder.AddKeycloak("keycloak", port: 8080, adminPassword: keycloakAdminPassword)
+           .WithDataVolume()
            .WithRealmImport("./Keycloak")
            .WithBindMount(keycloakThemePath, "/opt/keycloak/themes/openhub", isReadOnly: true);
 
@@ -93,10 +94,12 @@ var frontend = builder.AddViteApp("shell", "../OpenHub.UI")
     .WithExternalHttpEndpoints();
 
 var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>("product-manager-api")
+    .WithHttpEndpoint(port: 5200)
     .WithHttpHealthCheck("/health")
     .WithReference(catalogDb)
     .WithReference(redis)
     .WithReference(keycloak)
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("KeyCloak__AdminUsername", "admin")
     .WithEnvironment("KeyCloak__AdminPassword", keycloakAdminPassword)
     .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))

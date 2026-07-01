@@ -9,9 +9,12 @@ public class TenantMiddleware(RequestDelegate next)
         if (context.User.Identity?.IsAuthenticated == true)
         {
             var tenantClaim = context.User.FindFirst("tenant_id")?.Value;
-            var iss = context.User.FindFirst("iss")?.Value;
+            var iss         = context.User.FindFirst("iss")?.Value;
+            var sub         = context.User.FindFirst("sub")?.Value;
+            var email       = context.User.FindFirst("email")?.Value ?? "";
+            var firstName   = context.User.FindFirst("given_name")?.Value ?? "";
+            var lastName    = context.User.FindFirst("family_name")?.Value ?? "";
 
-            // Extract realm slug from issuer: "http://keycloak:8080/realms/client-a" → "client-a"
             var realmSlug = iss?.Split("/realms/", 2).LastOrDefault()?.TrimEnd('/');
 
             if (Guid.TryParse(tenantClaim, out var tenantId) && realmSlug is not null)
@@ -20,7 +23,18 @@ public class TenantMiddleware(RequestDelegate next)
                     tenantId, realmSlug, context.RequestAborted);
 
                 if (tenant is not null)
+                {
                     context.Items["TenantId"] = tenant.Id;
+
+                    if (sub is not null)
+                    {
+                        var userId = await tenantAccessor.GetOrProvisionUserAsync(
+                            tenant.Id, sub, email, firstName, lastName, context.RequestAborted);
+
+                        if (userId is not null)
+                            context.Items["UserId"] = userId.Value;
+                    }
+                }
             }
         }
 

@@ -10,7 +10,18 @@ public class BrandConfiguration : IEntityTypeConfiguration<BrandEntity>
     {
         builder.ToTable("brands", "catalog");
         builder.HasKey(b => b.Id);
-        builder.Property(b => b.Name).IsRequired();
+
+        builder.Property(b => b.Id).HasColumnName("id");
+        builder.Property(b => b.TenantId).HasColumnName("tenant_id");
+        builder.Property(b => b.ManufacturerId).HasColumnName("manufacturer_id");
+        builder.Property(b => b.Name).HasColumnName("name").IsRequired();
+        builder.Property(b => b.Code).HasColumnName("code");
+        builder.Property(b => b.LogoUrl).HasColumnName("logo_url");
+        builder.Property(b => b.IsActive).HasColumnName("is_active");
+        builder.Property(b => b.CreatedAt).HasColumnName("created_at");
+        builder.Property(b => b.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(b => b.DeletedAt).HasColumnName("deleted_at");
+
         builder.HasQueryFilter(b => b.DeletedAt == null);
     }
 }

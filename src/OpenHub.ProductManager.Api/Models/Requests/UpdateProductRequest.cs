@@ -13,11 +13,11 @@ public class UpdateProductRequest
     [Description("Updated short description. Omit to leave unchanged. Max 500 characters.")]
     public string? ShortDescription { get; set; }
 
-    [Description("Updated manufacturer reference, owned by the caller's tenant. Omit to leave unchanged. Pass null explicitly to clear.")]
-    public Guid? ManufacturerId { get; set; }
+    [Description("Updated manufacturer name. Omit to leave unchanged. Pass empty string to clear.")]
+    public string? Manufacturer { get; set; }
 
-    [Description("Updated brand reference, owned by the caller's tenant. Omit to leave unchanged. Pass null explicitly to clear.")]
-    public Guid? BrandId { get; set; }
+    [Description("Updated brand name. Omit to leave unchanged. Pass empty string to clear.")]
+    public string? Brand { get; set; }
 
     [Description("Updated condition type reference. Omit to leave unchanged.")]
     public Guid? ConditionTypeId { get; set; }
