@@ -25,6 +25,7 @@ public class TenantMiddleware(RequestDelegate next)
                 if (tenant is not null)
                 {
                     context.Items["TenantId"] = tenant.Id;
+                    context.Items["TenantSlug"] = realmSlug;
 
                     if (sub is not null)
                     {

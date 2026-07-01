@@ -30,6 +30,9 @@ coverage/
 # Exception: API projects need launchSettings committed so Aspire can discover their endpoints
 !src/OpenHub.ProductManager.Api/Properties/launchSettings.json
 
+# Azure Functions local-only dev settings (may contain local secrets)
+local.settings.json
+
 # ── React / Node ─────────────────────────────────────────────────────────────
 
 node_modules/

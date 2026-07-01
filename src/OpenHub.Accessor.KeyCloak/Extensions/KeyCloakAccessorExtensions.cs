@@ -1,7 +1,9 @@
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenHub.Accessor.KeyCloak.Interfaces;
+using OpenHub.Accessor.KeyCloak.Models;
 
 namespace OpenHub.Accessor.KeyCloak.Extensions;
 
@@ -23,6 +25,40 @@ public static class KeyCloakAccessorExtensions
         // the singleton bypasses the typed-client factory and gets a bare HttpClient
         // with no BaseAddress configured.
         services.AddHttpClient<IKeyCloakRealmAccessor, KeyCloakRealmAccessor>()
+            .ConfigureHttpClient((sp, client) =>
+            {
+                var opts = sp.GetRequiredService<IOptions<KeyCloakOptions>>().Value;
+                var cfg  = sp.GetRequiredService<IConfiguration>();
+
+                var baseUrl = !string.IsNullOrWhiteSpace(opts.BaseUrl)
+                    ? opts.BaseUrl
+                    : cfg.GetConnectionString("keycloak");
+
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                    throw new InvalidOperationException(
+                        "Keycloak base URL not configured. Set KeyCloak:BaseUrl or ConnectionStrings:keycloak.");
+
+                client.BaseAddress = new Uri(baseUrl);
+            });
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <see cref="IKeyCloakM2MTokenAccessor"/> for machine-to-machine
+    /// client_credentials tokens, one client secret per tenant realm (see
+    /// <see cref="M2MOptions"/>). Opt-in and separate from <see cref="AddKeyCloakAccessor"/>
+    /// so services that don't need M2M auth (e.g. ProductManager.Api) aren't forced
+    /// to carry Vault-backed M2M secret config.
+    /// </summary>
+    public static IServiceCollection AddKeyCloakM2MTokenAccessor(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.Configure<KeyCloakOptions>(configuration.GetSection(KeyCloakOptions.SectionName));
+        services.Configure<M2MOptions>(configuration.GetSection(M2MOptions.SectionName));
+        services.AddHybridCache();
+
+        services.AddHttpClient<IKeyCloakM2MTokenAccessor, KeyCloakM2MTokenAccessor>()
             .ConfigureHttpClient((sp, client) =>
             {
                 var opts = sp.GetRequiredService<IOptions<KeyCloakOptions>>().Value;
