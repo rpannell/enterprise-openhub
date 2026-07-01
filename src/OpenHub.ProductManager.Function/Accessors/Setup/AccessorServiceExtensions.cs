@@ -17,7 +17,13 @@ public static class AccessorServiceExtensions
             // name to the real dev endpoint automatically — no per-service hardcoded
             // URL to keep in sync. ProductManagerApi:BaseUrl overrides it for
             // standalone (non-Aspire) runs.
-            var baseUrl = configuration["ProductManagerApi:BaseUrl"] ?? "http://product-manager-api";
+            //
+            // "https+http://" is Aspire's documented scheme-priority syntax: it tries
+            // an https endpoint first, falling back to http. Dev today only registers
+            // an http endpoint for product-manager-api (Services:product-manager-api:http:0),
+            // so this resolves via the http fallback there, but stays correct without
+            // changes if an https endpoint is added later (e.g. in a deployed environment).
+            var baseUrl = configuration["ProductManagerApi:BaseUrl"] ?? "https+http://product-manager-api";
             client.BaseAddress = new Uri(baseUrl);
         });
 
