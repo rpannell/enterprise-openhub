@@ -108,4 +108,14 @@ var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>(
     .WaitFor(flyway)
     .WaitFor(keycloak);
 
+var productManagerFunction = builder.AddAzureFunctionsProject<Projects.OpenHub_ProductManager_Function>("product-manager-function")
+    .WithReference(productManagerApi)
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    .WaitFor(rabbitmq)
+    .WaitFor(keycloak)
+    .WaitFor(productManagerApi);
+
 builder.Build().Run();

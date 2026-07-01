@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Http;
 using OpenHub.Accessor.RabbitMq;
 using OpenHub.ProductManager.Api.Accessors.Interfaces;
-using OpenHub.ProductManager.Api.Events;
 using OpenHub.ProductManager.Api.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Models;
 using OpenHub.ProductManager.Api.Mappers;
 using OpenHub.ProductManager.Api.Models.Requests;
+using OpenHub.ProductManager.Contracts;
 
 namespace OpenHub.ProductManager.Api.Managers;
 
@@ -24,6 +24,11 @@ public class ProductManager(
     private Guid TenantId =>
         http.HttpContext?.Items["TenantId"] as Guid?
             ?? throw new InvalidOperationException("Tenant context not set. Ensure TenantMiddleware is registered.");
+
+    private string TenantSlug =>
+        http.HttpContext?.Items["TenantSlug"] as string
+            ?? throw new InvalidOperationException("Tenant context not set. Ensure TenantMiddleware is registered.");
+
     public async Task<IReadOnlyList<ProductDto>> GetAllAsync(CancellationToken ct = default)
     {
         var entities = await productAccessor.GetAllAsync(ct);
@@ -83,6 +88,7 @@ public class ProductManager(
             ProductId = created.Id,
             TenantId = TenantId,
             UserId = createUserId,
+            RealmSlug = TenantSlug,
         }, cancellationToken: ct);
 
         return mapper.ToDto(created);
@@ -120,6 +126,7 @@ public class ProductManager(
             ProductId = updated.Id,
             TenantId = TenantId,
             UserId = modifyUserId,
+            RealmSlug = TenantSlug,
         }, cancellationToken: ct);
 
         return mapper.ToDto(updated);
@@ -137,6 +144,7 @@ public class ProductManager(
             ProductId = id,
             TenantId = TenantId,
             UserId = deleteUserId,
+            RealmSlug = TenantSlug,
             IsDeleted = true,
         }, cancellationToken: ct);
 
