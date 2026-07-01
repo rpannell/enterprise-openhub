@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http;
+using OpenHub.Accessor.RabbitMq;
 using OpenHub.ProductManager.Api.Accessors.Interfaces;
+using OpenHub.ProductManager.Api.Events;
 using OpenHub.ProductManager.Api.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Models;
@@ -16,7 +18,8 @@ public class ProductManager(
     IProductEngine productEngine,
     IProductPricingEngine pricingEngine,
     ProductMapper mapper,
-    IHttpContextAccessor http) : IProductManager
+    IHttpContextAccessor http,
+    IMessagePublisher messagePublisher) : IProductManager
 {
     private Guid TenantId =>
         http.HttpContext?.Items["TenantId"] as Guid?
@@ -74,6 +77,14 @@ public class ProductManager(
 
         var entity = mapper.ToEntity(dto);
         var created = await productAccessor.CreateAsync(entity, ct);
+
+        await messagePublisher.PublishAsync(new ProductChangedEvent
+        {
+            ProductId = created.Id,
+            TenantId = TenantId,
+            UserId = createUserId,
+        }, cancellationToken: ct);
+
         return mapper.ToDto(created);
     }
 
@@ -103,6 +114,14 @@ public class ProductManager(
         existing.ModifyUserId = modifyUserId;
 
         var updated = await productAccessor.UpdateAsync(existing, ct);
+
+        await messagePublisher.PublishAsync(new ProductChangedEvent
+        {
+            ProductId = updated.Id,
+            TenantId = TenantId,
+            UserId = modifyUserId,
+        }, cancellationToken: ct);
+
         return mapper.ToDto(updated);
     }
 
@@ -112,6 +131,15 @@ public class ProductManager(
         if (existing is null) return false;
 
         await productAccessor.SoftDeleteAsync(id, deleteUserId, ct);
+
+        await messagePublisher.PublishAsync(new ProductChangedEvent
+        {
+            ProductId = id,
+            TenantId = TenantId,
+            UserId = deleteUserId,
+            IsDeleted = true,
+        }, cancellationToken: ct);
+
         return true;
     }
 

@@ -8,6 +8,7 @@ using OpenHub.ProductManager.Api.Managers.Engines.Setup;
 using OpenHub.ProductManager.Api.Managers.Setup;
 using OpenHub.ProductManager.Api.Mappers.Setup;
 using OpenHub.ProductManager.Api.Middleware;
+using OpenHub.Accessor.RabbitMq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +31,9 @@ builder.AddNpgsqlDbContext<CatalogDbContext>("catalog");
 // ── Caching (HybridCache: L1 in-process + L2 Redis) ─────────────────────────
 builder.AddRedisDistributedCache("redis");
 builder.Services.AddHybridCache();
+
+// ── Messaging (RabbitMQ durable fanout exchange for product change events) ──
+builder.Services.AddRabbitMqPublisher(builder.Configuration.GetSection("RabbitMq"));
 
 // ── Health checks — infrastructure dependencies ───────────────────────────────
 // DB and Redis health checks are registered automatically by the Aspire integrations above.
