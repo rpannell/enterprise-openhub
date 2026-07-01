@@ -5,5 +5,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    proxy: {
+      "/pm": {
+        target: "http://localhost:5200",
+        rewrite: (path) => path.replace(/^\/pm/, ""),
+        changeOrigin: true,
+      },
+    },
   },
 });

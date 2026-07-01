@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using OpenHub.ProductManager.Api.Accessors.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Interfaces;
@@ -14,8 +15,12 @@ public class ProductManager(
     ICatalogLookupAccessor catalogLookup,
     IProductEngine productEngine,
     IProductPricingEngine pricingEngine,
-    ProductMapper mapper) : IProductManager
+    ProductMapper mapper,
+    IHttpContextAccessor http) : IProductManager
 {
+    private Guid TenantId =>
+        http.HttpContext?.Items["TenantId"] as Guid?
+            ?? throw new InvalidOperationException("Tenant context not set. Ensure TenantMiddleware is registered.");
     public async Task<IReadOnlyList<ProductDto>> GetAllAsync(CancellationToken ct = default)
     {
         var entities = await productAccessor.GetAllAsync(ct);
@@ -57,7 +62,13 @@ public class ProductManager(
 
     public async Task<ProductDto> CreateAsync(CreateProductRequest request, Guid createUserId, CancellationToken ct = default)
     {
+        var manufacturerId = await ResolveManufacturerAsync(request.Manufacturer, ct);
+        var brandId = await ResolveBrandAsync(request.Brand, ct);
+
         var dto = mapper.ToDto(request);
+        dto.TenantId = TenantId;
+        dto.ManufacturerId = manufacturerId;
+        dto.BrandId = brandId;
         dto.CreateUserId = createUserId;
         dto.ModifyUserId = createUserId;
 
@@ -74,8 +85,14 @@ public class ProductManager(
         if (request.Name is not null) existing.Name = request.Name;
         if (request.Description is not null) existing.Description = request.Description;
         if (request.ShortDescription is not null) existing.ShortDescription = request.ShortDescription;
-        if (request.ManufacturerId.HasValue) existing.ManufacturerId = request.ManufacturerId;
-        if (request.BrandId.HasValue) existing.BrandId = request.BrandId;
+        if (request.Manufacturer is not null)
+            existing.ManufacturerId = string.IsNullOrEmpty(request.Manufacturer)
+                ? null
+                : await ResolveManufacturerAsync(request.Manufacturer, ct);
+        if (request.Brand is not null)
+            existing.BrandId = string.IsNullOrEmpty(request.Brand)
+                ? null
+                : await ResolveBrandAsync(request.Brand, ct);
         if (request.ConditionTypeId.HasValue) existing.ConditionTypeId = request.ConditionTypeId;
         if (request.AvailabilityStatusId.HasValue) existing.AvailabilityStatusId = request.AvailabilityStatusId;
         if (request.ManufacturerPartNumber is not null) existing.ManufacturerPartNumber = request.ManufacturerPartNumber;
@@ -96,6 +113,24 @@ public class ProductManager(
 
         await productAccessor.SoftDeleteAsync(id, deleteUserId, ct);
         return true;
+    }
+
+    private async Task<Guid> ResolveManufacturerAsync(string name, CancellationToken ct)
+    {
+        var all = await catalogLookup.GetManufacturersAsync(ct);
+        var match = all.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+            throw new KeyNotFoundException($"Manufacturer '{name}' not found in your catalog.");
+        return match.Id;
+    }
+
+    private async Task<Guid> ResolveBrandAsync(string name, CancellationToken ct)
+    {
+        var all = await catalogLookup.GetBrandsAsync(ct);
+        var match = all.FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+            throw new KeyNotFoundException($"Brand '{name}' not found in your catalog.");
+        return match.Id;
     }
 
     private async Task<IReadOnlyDictionary<Guid, string>> GetManufacturerNamesAsync(CancellationToken ct)

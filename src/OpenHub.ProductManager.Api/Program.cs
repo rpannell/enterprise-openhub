@@ -1,7 +1,5 @@
 using Asp.Versioning;
 using FluentValidation;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.JsonWebTokens;
 using OpenHub.Accessor.KeyCloak.Extensions;
 using OpenHub.ProductManager.Api.Accessors.Data;
 using OpenHub.ProductManager.Api.Accessors.Setup;
@@ -45,49 +43,7 @@ if (!string.IsNullOrWhiteSpace(keycloakUrl))
 }
 
 // ── Authentication — multi-realm Keycloak ────────────────────────────────────
-// Dynamic issuer: reads the `iss` claim from the raw JWT before validation and sets
-// Authority to that realm URL. This allows any tenant's realm to authenticate —
-// both interactive users (auth-code flow) and M2M callers (client credentials).
-//
-// Audience: Set Auth:Audience in config (e.g. "product-manager") to enforce that
-// only tokens explicitly targeting this API are accepted. Requires a Keycloak
-// audience mapper on every client (user and M2M) in every tenant realm.
-// Leave unset in dev to skip audience validation.
-var jwtAudience = builder.Configuration["Auth:Audience"];
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.RequireHttpsMetadata = builder.Environment.IsProduction();
-
-        if (!string.IsNullOrWhiteSpace(jwtAudience))
-            options.Audience = jwtAudience;
-
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = ctx =>
-            {
-                if (ctx.Token is null) return Task.CompletedTask;
-
-                try
-                {
-                    var handler = new JsonWebTokenHandler();
-                    var jwt = handler.ReadJsonWebToken(ctx.Token);
-                    var iss = jwt.Issuer;
-                    if (!string.IsNullOrEmpty(iss))
-                    {
-                        ctx.Options.Authority = iss;
-                        ctx.Options.TokenValidationParameters.ValidIssuer = iss;
-                    }
-                }
-                catch { }
-
-                return Task.CompletedTask;
-            }
-        };
-    });
-
-builder.Services.AddAuthorization();
+builder.AddOpenHubJwtAuthentication();
 
 // ── API versioning ────────────────────────────────────────────────────────────
 builder.Services.AddApiVersioning(options =>
@@ -128,5 +84,7 @@ app.MapDefaultEndpoints();
 app.MapOpenHubApiDocs("OpenHub Product Manager API v1");
 app.MapProductEndpoints();
 app.MapLookupEndpoints();
+app.MapManufacturerEndpoints();
+app.MapBrandEndpoints();
 
 app.Run();

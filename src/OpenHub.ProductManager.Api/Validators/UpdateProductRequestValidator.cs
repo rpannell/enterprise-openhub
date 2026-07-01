@@ -20,6 +20,14 @@ public sealed class UpdateProductRequestValidator : AbstractValidator<UpdateProd
             .MaximumLength(500)
             .When(x => x.ShortDescription is not null);
 
+        RuleFor(x => x.Manufacturer)
+            .MaximumLength(200)
+            .When(x => x.Manufacturer is not null);
+
+        RuleFor(x => x.Brand)
+            .MaximumLength(200)
+            .When(x => x.Brand is not null);
+
         RuleFor(x => x.ManufacturerPartNumber)
             .MaximumLength(200)
             .When(x => x.ManufacturerPartNumber is not null);

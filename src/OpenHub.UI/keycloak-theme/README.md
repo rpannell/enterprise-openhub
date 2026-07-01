@@ -29,13 +29,36 @@ theme → openhub → Save.**
 
 ## What's in it
 
-- `login/resources/css/styles.css` — colors, fonts, form styling, dark mode
+- `login/resources/css/styles.css` — colors, fonts, form styling, dark mode,
+  and the responsive layout described above
 - `login/resources/img/logo-light.svg`, `logo-dark.svg` — the OpenHub
   wordmark, swapped automatically based on the visitor's OS theme; replaces
   the realm display name text in the header via CSS background-image
+- `login/resources/img/logo-white.svg` — full OpenHub wordmark in white,
+  shown top-left of the brand area on tablet/desktop (stacked on top of
+  the watermark texture below)
+- `login/resources/img/watermark.svg` — large, low-opacity hub mark shown
+  lower in the brand area, for texture
 - `login/resources/img/favicon.ico` — same favicon as the React app. Child
   theme resources override the parent's automatically, so dropping this
   file in is enough — no template changes needed.
+
+## Layout
+
+The form lives in a panel anchored to the right edge of the screen:
+
+| Screen | Panel width |
+|---|---|
+| Phone (< 640px) | 100% — normal centered card, no fixed panel |
+| Tablet (640–1023px) | 50% |
+| Desktop (≥ 1024px) | 33% (min 380px, max 560px) |
+
+The space to the left (tablet/desktop only) shows a branded gradient with
+a faint watermark of the hub mark — pure CSS background, no extra markup.
+This is done entirely by repositioning Keycloak's own existing elements
+(`.login-pf-page` becomes the fixed right panel, `.card-pf` becomes
+border/shadow-less since it's already visually separated by the panel) —
+no FreeMarker templates were touched.
 
 ## Editing it
 

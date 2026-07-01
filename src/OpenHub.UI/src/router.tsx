@@ -5,6 +5,10 @@ import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 import { RoleGate } from "./auth/RoleGate";
 import { modules } from "./config/modules";
+import ProductApp from "./modules/product/ProductApp";
+import ProductList from "./modules/product/catalog/ProductList";
+import ProductCreatePage from "./modules/product/catalog/ProductCreatePage";
+import ProductEditPage from "./modules/product/catalog/ProductEditPage";
 
 function Loading() {
   return (
@@ -23,6 +27,9 @@ function Forbidden() {
   );
 }
 
+const productModule = modules.find((m) => m.id === "product")!;
+const otherModules = modules.filter((m) => m.id !== "product");
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -30,8 +37,26 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
       { path: "account", element: <Account /> },
-      ...modules.map((m) => ({
-        path: m.path.slice(1), // relative to Shell
+
+      // Product module — nested routes for catalog list, create, edit
+      {
+        path: "product",
+        element: (
+          <RoleGate roles={productModule.roles} fallback={<Forbidden />}>
+            <ProductApp />
+          </RoleGate>
+        ),
+        children: [
+          { index: true, element: <Navigate to="catalog" replace /> },
+          { path: "catalog", element: <ProductList /> },
+          { path: "catalog/new", element: <ProductCreatePage /> },
+          { path: "catalog/:id/edit", element: <ProductEditPage /> },
+        ],
+      },
+
+      // All other modules remain flat
+      ...otherModules.map((m) => ({
+        path: m.path.slice(1),
         element: (
           <RoleGate roles={m.roles} fallback={<Forbidden />}>
             <Suspense fallback={<Loading />}>
@@ -40,6 +65,7 @@ export const router = createBrowserRouter([
           </RoleGate>
         ),
       })),
+
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

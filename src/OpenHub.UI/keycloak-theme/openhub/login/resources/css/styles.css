@@ -2,10 +2,16 @@
  * OpenHub — Keycloak login theme
  * Palette matches the React app: accent indigo #4A47C7, amber highlight #F2A93B.
  *
+ * Layout: the login form sits in a panel anchored to the right —
+ * full width on phone, half the screen on tablet, a third on desktop.
+ * The remaining space (desktop/tablet only) shows a branded gradient
+ * with a faint watermark of the hub mark.
+ *
  * Plain CSS, no build step, no JS — overriding the classes and PatternFly
  * CSS variables Keycloak's default login theme (parent=keycloak) uses.
- * If your Keycloak version renders different markup, open devtools on the
- * login page and adjust the selectors to match what you see.
+ * Confirmed against Keycloak's own theme.properties: kcLoginClass=
+ * login-pf-page, kcFormCardClass=card-pf. If a future version renames
+ * these, open devtools on the login page to find the new ones.
  *
  * Dark mode follows the OS/browser preference (prefers-color-scheme) —
  * there's no toggle here, since nobody's logged in yet to remember one for.
@@ -26,13 +32,65 @@
     -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+html, body.login-pf {
+  height: 100%;
+}
+
 body.login-pf {
-  background: #f1f1f9;
+  margin: 0;
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Three stacked layers (first = on top): logo, watermark texture, gradient.
+     This whole stack only shows in the area LEFT of the form panel on
+     tablet/desktop — on phone the panel covers 100% so none of it shows. */
+  background-image:
+    url("../img/logo-white.svg"),
+    url("../img/watermark.svg"),
+    linear-gradient(135deg, #4a47c7, #2f2c8f);
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-position: 48px 48px, -60px bottom, 0 0;
+  background-size: 200px, 520px, cover;
 }
 
 body.login-pf::before {
   background-image: none !important;
+}
+
+/* ---------- The form panel (kcLoginClass = .login-pf-page) ---------- */
+/* Mobile (default): full width, normal flow, no fixed panel. */
+.login-pf-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: 32px 24px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+/* Tablet: right HALF of the screen */
+@media (min-width: 640px) {
+  .login-pf-page {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 50%;
+    min-height: 100vh;
+    height: 100vh;
+    overflow-y: auto;
+    box-shadow: -8px 0 32px rgba(15, 23, 42, 0.12);
+    padding: 48px;
+  }
+}
+
+/* Desktop: right THIRD of the screen */
+@media (min-width: 1024px) {
+  .login-pf-page {
+    width: 33.3333%;
+    min-width: 380px;
+    max-width: 560px;
+  }
 }
 
 /* Swap the realm display name text for the OpenHub logo image */
@@ -41,12 +99,18 @@ body.login-pf::before {
   background-repeat: no-repeat;
   background-position: left center;
   background-size: contain;
-  height: 40px;
-  width: 200px;
-  margin: 0 auto 1.5rem;
+  height: 36px;
+  width: 180px;
+  margin: 0 auto 2rem;
   color: transparent;
   font-size: 0;
   overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  #kc-header-wrapper {
+    margin: 0 0 2.5rem;
+  }
 }
 
 .login-pf-page .card-pf {
@@ -54,6 +118,19 @@ body.login-pf::before {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
   border: 1px solid #e2e8f0;
   padding: 2rem;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .login-pf-page .card-pf {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+    max-width: none;
+  }
 }
 
 #kc-page-title {
@@ -107,6 +184,16 @@ a:hover {
 /* ---------- Dark mode (follows OS preference) ---------- */
 @media (prefers-color-scheme: dark) {
   body.login-pf {
+    background-image:
+      url("../img/logo-white.svg"),
+      url("../img/watermark.svg"),
+      linear-gradient(135deg, #2f2c8f, #0d1117);
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-position: 48px 48px, -60px bottom, 0 0;
+    background-size: 200px, 520px, cover;
+  }
+
+  .login-pf-page {
     background: #0d1117;
   }
 
@@ -122,6 +209,12 @@ a:hover {
     background-color: #161b22;
     border-color: #30363d;
     color: #e6edf3;
+  }
+
+  @media (min-width: 640px) {
+    .login-pf-page .card-pf {
+      background-color: transparent;
+    }
   }
 
   label,

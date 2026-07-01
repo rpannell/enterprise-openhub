@@ -9,6 +9,7 @@ public static class ManagerServiceExtensions
     {
         services.AddScoped<IProductManager, ProductManager>();
         services.AddScoped<ILookupManager, LookupManager>();
+        services.AddScoped<ICatalogManager, CatalogManager>();
 
         return services;
     }
