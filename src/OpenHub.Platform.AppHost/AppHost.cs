@@ -16,7 +16,7 @@ var rabbitmqConfigPath = Path.Combine(builder.AppHostDirectory, "RabbitMq", "rab
 var rabbitmqDefinitionsPath = Path.Combine(builder.AppHostDirectory, "RabbitMq", "definitions.json");
 
 var rabbitmq =
-    builder.AddRabbitMQ("rabbit", userName: rabbitUser, password: rabbitPass)
+    builder.AddRabbitMQ("rabbit", userName: rabbitUser, password: rabbitPass, port: 5672)
            .WithManagementPlugin()
            .WithDataVolume()
            .WithBindMount(rabbitmqConfigPath, "/etc/rabbitmq/rabbitmq.conf", isReadOnly: true)

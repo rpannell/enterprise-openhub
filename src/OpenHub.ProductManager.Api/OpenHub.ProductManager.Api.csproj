@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OpenHub.Platform.ServiceDefaults\OpenHub.Platform.ServiceDefaults.csproj" />
     <ProjectReference Include="..\OpenHub.Accessor.KeyCloak\OpenHub.Accessor.KeyCloak.csproj" />
+    <ProjectReference Include="..\OpenHub.Accessor.RabbitMq\OpenHub.Accessor.RabbitMq.csproj" />
   </ItemGroup>
 
   <ItemGroup>
