@@ -1,6 +1,6 @@
-using OpenHub.ProductManager.Function.Accessors.Models;
+using OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 
-namespace OpenHub.ProductManager.Function.Accessors.Interfaces;
+namespace OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
 
 public interface IProductManagerApiAccessor
 {

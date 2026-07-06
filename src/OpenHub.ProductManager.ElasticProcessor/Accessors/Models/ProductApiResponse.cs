@@ -1,4 +1,4 @@
-namespace OpenHub.ProductManager.Function.Accessors.Models;
+namespace OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 
 /// <summary>
 /// Minimal subset of ProductManager.Api's ProductResponse — just what's needed

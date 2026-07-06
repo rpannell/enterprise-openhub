@@ -40,8 +40,8 @@ Useful for quick iteration when the full Aspire stack isn't needed.
 **Required environment variables:**
 
 ```powershell
-$env:ConnectionStrings__catalog  = "Host=localhost;Database=catalog;Username=postgres;Password=Dev_P@ssw0rd1!"
-$env:ConnectionStrings__redis    = "localhost:6379"
+$env:ConnectionStrings__Catalog  = "Host=localhost;Database=catalog;Username=postgres;Password=Dev_P@ssw0rd1!"
+$env:ConnectionStrings__Redis    = "localhost:6379"
 $env:KeyCloak__BaseUrl           = "http://localhost:8080"
 $env:KeyCloak__AdminUsername     = "admin"
 $env:KeyCloak__AdminPassword     = "<your-keycloak-admin-password>"
@@ -49,7 +49,7 @@ $env:KeyCloak__AdminPassword     = "<your-keycloak-admin-password>"
 
 **Optional — omit to skip Keycloak readiness check:**
 ```powershell
-$env:ConnectionStrings__keycloak = "http://localhost:8080"
+$env:ConnectionStrings__KeyCloak = "http://localhost:8080"
 ```
 
 **Optional — omit to skip Consul/Vault config loading:**
@@ -82,8 +82,8 @@ docker build \
 Run:
 ```bash
 docker run -p 8080:8080 \
-  -e ConnectionStrings__catalog="Host=host.docker.internal;Database=catalog;Username=postgres;Password=Dev_P@ssw0rd1!" \
-  -e ConnectionStrings__redis="host.docker.internal:6379" \
+  -e ConnectionStrings__Catalog="Host=host.docker.internal;Database=catalog;Username=postgres;Password=Dev_P@ssw0rd1!" \
+  -e ConnectionStrings__Redis="host.docker.internal:6379" \
   -e KeyCloak__BaseUrl="http://host.docker.internal:8080" \
   -e KeyCloak__AdminUsername="admin" \
   -e KeyCloak__AdminPassword="<password>" \
@@ -170,9 +170,9 @@ All configuration keys follow `Section:Key` naming (env var: `Section__Key`).
 
 | Key | Source | Description |
 |---|---|---|
-| `ConnectionStrings:catalog` | Aspire / env | PostgreSQL connection string |
-| `ConnectionStrings:redis` | Aspire / env | Redis connection string |
-| `ConnectionStrings:keycloak` | Aspire / env | Keycloak base URL (for health check) |
+| `ConnectionStrings:Catalog` | Aspire / env | PostgreSQL connection string |
+| `ConnectionStrings:Redis` | Aspire / env | Redis connection string |
+| `ConnectionStrings:KeyCloak` | Aspire / env | Keycloak base URL (for health check) |
 | `KeyCloak:BaseUrl` | env / Consul | Keycloak base URL for admin API calls |
 | `KeyCloak:AdminUsername` | env | Keycloak admin username |
 | `KeyCloak:AdminPassword` | env / Vault | Keycloak admin password |

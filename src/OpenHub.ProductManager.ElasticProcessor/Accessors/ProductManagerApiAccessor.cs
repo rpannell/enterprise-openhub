@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using OpenHub.ProductManager.Function.Accessors.Interfaces;
-using OpenHub.ProductManager.Function.Accessors.Models;
+using OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 
-namespace OpenHub.ProductManager.Function.Accessors;
+namespace OpenHub.ProductManager.ElasticProcessor.Accessors;
 
 public class ProductManagerApiAccessor(HttpClient http) : IProductManagerApiAccessor
 {

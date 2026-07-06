@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
-using OpenHub.ProductManager.Function.Managers.Engines.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Managers.Engines.Interfaces;
 
-namespace OpenHub.ProductManager.Function.Managers.Engines.Setup;
+namespace OpenHub.ProductManager.ElasticProcessor.Managers.Engines.Setup;
 
 public static class EngineServiceExtensions
 {

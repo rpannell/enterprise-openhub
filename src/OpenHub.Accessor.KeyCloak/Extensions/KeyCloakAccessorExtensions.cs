@@ -17,7 +17,7 @@ public static class KeyCloakAccessorExtensions
 
         // BaseAddress resolves in priority order:
         //   1. KeyCloak:BaseUrl (explicit config or Vault secret)
-        //   2. ConnectionStrings:keycloak (injected by Aspire WithReference(keycloak))
+        //   2. ConnectionStrings:KeyCloak (injected by Aspire WithReference(keycloak))
         // Aspire's AddServiceDiscovery() (registered by AddServiceDefaults()) handles
         // resolving logical names like "http://keycloak" to the real container address.
         // Register on the interface so DI always routes through IHttpClientFactory.
@@ -32,11 +32,11 @@ public static class KeyCloakAccessorExtensions
 
                 var baseUrl = !string.IsNullOrWhiteSpace(opts.BaseUrl)
                     ? opts.BaseUrl
-                    : cfg.GetConnectionString("keycloak");
+                    : cfg.GetConnectionString("KeyCloak");
 
                 if (string.IsNullOrWhiteSpace(baseUrl))
                     throw new InvalidOperationException(
-                        "Keycloak base URL not configured. Set KeyCloak:BaseUrl or ConnectionStrings:keycloak.");
+                        "Keycloak base URL not configured. Set KeyCloak:BaseUrl or ConnectionStrings:KeyCloak.");
 
                 client.BaseAddress = new Uri(baseUrl);
             });
@@ -66,11 +66,11 @@ public static class KeyCloakAccessorExtensions
 
                 var baseUrl = !string.IsNullOrWhiteSpace(opts.BaseUrl)
                     ? opts.BaseUrl
-                    : cfg.GetConnectionString("keycloak");
+                    : cfg.GetConnectionString("KeyCloak");
 
                 if (string.IsNullOrWhiteSpace(baseUrl))
                     throw new InvalidOperationException(
-                        "Keycloak base URL not configured. Set KeyCloak:BaseUrl or ConnectionStrings:keycloak.");
+                        "Keycloak base URL not configured. Set KeyCloak:BaseUrl or ConnectionStrings:KeyCloak.");
 
                 client.BaseAddress = new Uri(baseUrl);
             });

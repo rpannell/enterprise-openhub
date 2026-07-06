@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Logging;
 using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.ProductManager.Contracts;
-using OpenHub.ProductManager.Function.Accessors.Interfaces;
-using OpenHub.ProductManager.Function.Managers.Engines.Interfaces;
-using OpenHub.ProductManager.Function.Managers.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Managers.Engines.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Managers.Interfaces;
 
-namespace OpenHub.ProductManager.Function.Managers;
+namespace OpenHub.ProductManager.ElasticProcessor.Managers;
 
 public class ProductSyncManager(
     IKeyCloakM2MTokenAccessor m2mAccessor,

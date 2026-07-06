@@ -1,7 +1,7 @@
 using OpenHub.ProductManager.Contracts;
-using OpenHub.ProductManager.Function.Managers.Engines.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Managers.Engines.Interfaces;
 
-namespace OpenHub.ProductManager.Function.Managers.Engines;
+namespace OpenHub.ProductManager.ElasticProcessor.Managers.Engines;
 
 public class ProductSyncEngine : IProductSyncEngine
 {

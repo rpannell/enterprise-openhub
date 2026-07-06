@@ -26,10 +26,10 @@ builder.AddVaultSecrets(
     "product-manager");          // service-specific secrets: DB passwords, API keys
 
 // ── Database ─────────────────────────────────────────────────────────────────
-builder.AddNpgsqlDbContext<CatalogDbContext>("catalog");
+builder.AddNpgsqlDbContext<CatalogDbContext>("Catalog");
 
 // ── Caching (HybridCache: L1 in-process + L2 Redis) ─────────────────────────
-builder.AddRedisDistributedCache("redis");
+builder.AddRedisDistributedCache("Redis");
 builder.Services.AddHybridCache();
 
 // ── Messaging (RabbitMQ durable fanout exchange for product change events) ──
@@ -38,8 +38,8 @@ builder.Services.AddRabbitMqPublisher(builder.Configuration.GetSection("RabbitMq
 // ── Health checks — infrastructure dependencies ───────────────────────────────
 // DB and Redis health checks are registered automatically by the Aspire integrations above.
 // Keycloak readiness check: reads URL from service discovery or configuration.
-var keycloakUrl = builder.Configuration["ConnectionStrings:keycloak"]
-    ?? builder.Configuration["KeyCloak:Url"];
+var keycloakUrl = builder.Configuration["ConnectionStrings:KeyCloak"]
+    ?? builder.Configuration["KeyCloak:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(keycloakUrl))
 {
     builder.Services.AddHealthChecks()

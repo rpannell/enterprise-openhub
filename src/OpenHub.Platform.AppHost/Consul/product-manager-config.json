@@ -1,0 +1,7 @@
+{
+  "RabbitMq": {
+    "ExchangeName": "product.changed",
+    "DurableExchange": true,
+    "PersistentMessages": true
+  }
+}
