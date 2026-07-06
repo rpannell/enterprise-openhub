@@ -134,8 +134,8 @@ Call `app.UseCors()` in the middleware pipeline (before `UseAuthentication`).
 Register infrastructure dependencies at startup:
 
 ```csharp
-var keycloakUrl = builder.Configuration["ConnectionStrings:keycloak"]
-    ?? builder.Configuration["KeyCloak:Url"];
+var keycloakUrl = builder.Configuration["ConnectionStrings:KeyCloak"]
+    ?? builder.Configuration["KeyCloak:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(keycloakUrl))
     builder.Services.AddHealthChecks()
         .AddCheck("keycloak", new KeycloakHealthCheck(keycloakUrl), tags: ["ready"]);

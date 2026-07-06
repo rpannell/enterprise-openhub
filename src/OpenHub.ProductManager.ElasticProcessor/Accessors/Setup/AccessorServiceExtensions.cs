@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using OpenHub.ProductManager.Function.Accessors.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
 
-namespace OpenHub.ProductManager.Function.Accessors.Setup;
+namespace OpenHub.ProductManager.ElasticProcessor.Accessors.Setup;
 
 public static class AccessorServiceExtensions
 {
@@ -11,7 +11,7 @@ public static class AccessorServiceExtensions
         services.AddHttpClient<IProductManagerApiAccessor, ProductManagerApiAccessor>(client =>
         {
             // "product-manager-api" is the Aspire resource name (AppHost.cs); with
-            // .WithReference(productManagerApi) on this Function's resource, Aspire's
+            // .WithReference(productManagerApi) on this project's resource, Aspire's
             // service discovery (registered for every typed HttpClient by
             // AddServiceDefaults()'s ConfigureHttpClientDefaults) resolves this logical
             // name to the real dev endpoint automatically — no per-service hardcoded

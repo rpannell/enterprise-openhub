@@ -1,6 +1,6 @@
 # OpenHub.ProductManager.Contracts
 
-Shared wire contracts for messages published by `OpenHub.ProductManager.Api` and consumed by downstream services (currently `OpenHub.ProductManager.Function`). A plain class library with no dependencies — reference it from any project that needs to publish or consume these messages, so the shape can't drift between publisher and consumer.
+Shared wire contracts for messages published by `OpenHub.ProductManager.Api` and consumed by downstream services (currently `OpenHub.ProductManager.ElasticProcessor`). A plain class library with no dependencies — reference it from any project that needs to publish or consume these messages, so the shape can't drift between publisher and consumer.
 
 ## Contents
 

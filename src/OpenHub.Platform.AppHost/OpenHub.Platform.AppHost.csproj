@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OpenHub.ProductManager.Api\OpenHub.ProductManager.Api.csproj" />
     <ProjectReference Include="..\OpenHub.ProductManager.Function\OpenHub.ProductManager.Function.csproj" />
+    <ProjectReference Include="..\OpenHub.ProductManager.ElasticProcessor\OpenHub.ProductManager.ElasticProcessor.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,13 @@
+using Microsoft.Extensions.Configuration;
+
 var builder = DistributedApplication.CreateBuilder(args);
+
+// Standard .NET hosts only auto-load user secrets when the environment is
+// "Development" — the plain "C#: OpenHub.Platform.AppHost" launch profile in
+// .vscode/launch.json doesn't set DOTNET_ENVIRONMENT, so secrets (e.g.
+// keycloak-admin-password) would otherwise silently fail to load and prompt
+// every run instead of being read back.
+builder.Configuration.AddUserSecrets<Program>();
 
 var postgresPassword = builder.AddParameter("postgres-password", value: "Dev_P@ssw0rd1!", secret: true);
 
@@ -7,7 +16,7 @@ var postgres =
            .WithDataVolume();
 
 // Product catalog database — Flyway manages its schema
-var catalogDb = postgres.AddDatabase("catalog");
+var catalogDb = postgres.AddDatabase("Catalog");
 
 var rabbitUser = builder.AddParameter("rabbitmq-username", value: "appuser");
 var rabbitPass = builder.AddParameter("rabbitmq-password", value: "MyDevPassword123!", secret: true);
@@ -16,14 +25,14 @@ var rabbitmqConfigPath = Path.Combine(builder.AppHostDirectory, "RabbitMq", "rab
 var rabbitmqDefinitionsPath = Path.Combine(builder.AppHostDirectory, "RabbitMq", "definitions.json");
 
 var rabbitmq =
-    builder.AddRabbitMQ("rabbit", userName: rabbitUser, password: rabbitPass, port: 5672)
+    builder.AddRabbitMQ("RabbitMq", userName: rabbitUser, password: rabbitPass, port: 5672)
            .WithManagementPlugin()
            .WithDataVolume()
            .WithBindMount(rabbitmqConfigPath, "/etc/rabbitmq/rabbitmq.conf", isReadOnly: true)
            .WithBindMount(rabbitmqDefinitionsPath, "/etc/rabbitmq/definitions.json", isReadOnly: true);
 
 var redis =
-    builder.AddRedis("redis")
+    builder.AddRedis("Redis")
            .WithDataVolume();
 
 var minio =
@@ -39,6 +48,17 @@ var consul = builder.AddContainer("consul", "hashicorp/consul")
     .WithEndpoint(targetPort: 8600, name: "dns", scheme: "udp")
     .WithHttpHealthCheck("/v1/status/leader");
 
+// One-shot: writes the non-secret dev config Consul is meant to serve — see
+// Consul/seed.sh. Without this, Consul KV is always empty in dev and
+// AddConsulConfiguration() silently no-ops on every run.
+var consulSeedPath = Path.Combine(builder.AppHostDirectory, "Consul");
+var consulSeed = builder.AddContainer("consul-seed", "hashicorp/consul")
+    .WithEntrypoint("/bin/sh")
+    .WithArgs("/seed/seed.sh")
+    .WithBindMount(consulSeedPath, "/seed", isReadOnly: true)
+    .WithEnvironment("CONSUL_HTTP_ADDR", consul.GetEndpoint("http"))
+    .WaitFor(consul);
+
 var vaultToken = builder.AddParameter("vault-token", value: "dev-only-token", secret: true);
 
 var vault = builder.AddContainer("vault", "hashicorp/vault")
@@ -53,7 +73,7 @@ bool.TryParse(builder.Configuration["Keycloak:UseRabbitMqListener"], out var use
 
 var keycloakAdminPassword = builder.AddParameter("keycloak-admin-password", secret: true);
 var keycloak =
-    builder.AddKeycloak("keycloak", port: 8080, adminPassword: keycloakAdminPassword)
+    builder.AddKeycloak("KeyCloak", port: 8080, adminPassword: keycloakAdminPassword)
            .WithDataVolume()
            .WithRealmImport("./Keycloak")
            .WithBindMount(keycloakThemePath, "/opt/keycloak/themes/openhub", isReadOnly: true);
@@ -62,7 +82,7 @@ if (useRabbitListener)
 {
     keycloak
         .WithDockerfile("./keycloak-rabbitmq-listener")
-        .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_HOST", "rabbit")
+        .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_HOST", "RabbitMq")
         .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_PORT", "5672")
         .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_USERNAME", "appuser")
         .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_PASSWORD", "MyDevPassword123!")
@@ -72,11 +92,25 @@ if (useRabbitListener)
         .WaitFor(rabbitmq);
 }
 
+// One-shot: writes the dev secrets Vault is meant to serve — see Vault/seed.sh.
+// Without this, Vault KV is always empty in dev and AddVaultSecrets() silently
+// no-ops on every run. Values are passed in as env vars, not hardcoded in the script.
+var vaultSeedPath = Path.Combine(builder.AppHostDirectory, "Vault");
+var vaultSeed = builder.AddContainer("vault-seed", "hashicorp/vault")
+    .WithEntrypoint("/bin/sh")
+    .WithArgs("/seed/seed.sh")
+    .WithBindMount(vaultSeedPath, "/seed", isReadOnly: true)
+    .WithEnvironment("VAULT_ADDR", vault.GetEndpoint("http"))
+    .WithEnvironment("VAULT_TOKEN", vaultToken)
+    .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword)
+    .WithEnvironment("RABBITMQ_PASSWORD", rabbitPass)
+    .WaitFor(vault);
+
 // Flyway runs schema migrations before the API starts
 var flywayPath = Path.Combine(builder.AppHostDirectory, "..", "Database", "ProductManager");
 var flyway = builder.AddContainer("flyway-catalog", "flyway/flyway", "latest")
     .WithBindMount(flywayPath, "/flyway/sql", isReadOnly: true)
-    .WithEnvironment("FLYWAY_URL", "jdbc:postgresql://postgres:5432/catalog")
+    .WithEnvironment("FLYWAY_URL", "jdbc:postgresql://postgres:5432/Catalog")
     .WithEnvironment("FLYWAY_USER", "postgres")
     .WithEnvironment("FLYWAY_PASSWORD", postgresPassword)
     .WithEnvironment("FLYWAY_SCHEMAS", "ref,catalog")
@@ -105,17 +139,29 @@ var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>(
     .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
     .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
     .WithEnvironment("Vault__Token", vaultToken)
-    .WaitFor(flyway)
-    .WaitFor(keycloak);
+    .WaitForCompletion(flyway)
+    .WaitFor(keycloak)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
 
-var productManagerFunction = builder.AddAzureFunctionsProject<Projects.OpenHub_ProductManager_Function>("product-manager-function")
+var productManagerElasticProcessor = builder.AddProject<Projects.OpenHub_ProductManager_ElasticProcessor>("product-manager-elastic-processor")
     .WithReference(productManagerApi)
+    .WithReference(rabbitmq)
+    .WithReference(redis)
     .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
     .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
     .WithEnvironment("Vault__Token", vaultToken)
     .WaitFor(rabbitmq)
     .WaitFor(keycloak)
-    .WaitFor(productManagerApi);
+    .WaitFor(productManagerApi)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
+
+// Only the nightly-reindex timer remains here — product sync moved to
+// product-manager-elastic-processor. No Keycloak/Vault/API dependency left.
+var productManagerFunction = builder.AddAzureFunctionsProject<Projects.OpenHub_ProductManager_Function>("product-manager-function")
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WaitForCompletion(consulSeed);
 
 builder.Build().Run();

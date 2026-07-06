@@ -1,6 +1,6 @@
 using OpenHub.ProductManager.Contracts;
 
-namespace OpenHub.ProductManager.Function.Managers.Engines.Interfaces;
+namespace OpenHub.ProductManager.ElasticProcessor.Managers.Engines.Interfaces;
 
 public interface IProductSyncEngine
 {
