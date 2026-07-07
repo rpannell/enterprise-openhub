@@ -49,6 +49,16 @@ public class BrandEndpointsTests : IClassFixture<ProductManagerApiFactory>
     }
 
     [Fact]
+    public async Task CreateBrand_EmptyName_ReturnsBadRequestValidationProblem()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/brands/", new CreateBrandRequest { Name = string.Empty });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task CreateBrand_Unauthenticated_Returns401()
     {
         _factory.ClaimsProvider.Claims = null;

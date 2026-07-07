@@ -16,6 +16,7 @@
          9.0.4 requires EF Core < 10, so using the InMemory 10.x default here causes a runtime
          MissingMethodException from mixed EF Core assembly versions. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.4" />
+    <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageReference Include="NSubstitute" Version="5.3.0" />
