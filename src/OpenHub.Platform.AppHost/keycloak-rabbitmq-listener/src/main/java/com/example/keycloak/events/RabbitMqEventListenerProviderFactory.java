@@ -32,6 +32,14 @@ import java.util.concurrent.TimeoutException;
  *   KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_PASSWORD
  *   KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_QUEUE
  *
+ * Tenant/user change fan-out (durable fanout exchanges, one per type — this
+ * factory only ever declares these exchanges, it never owns a queue on them;
+ * each consuming domain declares and binds its own):
+ *   KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_TENANT_CHANGED_EXCHANGE
+ *     default "tenant.changed" — ResourceType.ORGANIZATION admin events
+ *   KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_USER_CHANGED_EXCHANGE
+ *     default "user.changed" — ResourceType.USER / ORGANIZATION_MEMBERSHIP admin events
+ *
  * Filtering config (optional, comma-separated, case-insensitive). Leave unset
  * or empty to publish everything of that kind:
  *   KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_EVENT_TYPES
@@ -40,6 +48,8 @@ import java.util.concurrent.TimeoutException;
  *   KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_RESOURCE_TYPES
  *     e.g. "USER,ORGANIZATION,ORGANIZATION_MEMBERSHIP"
  *     (names must match org.keycloak.events.admin.ResourceType constants)
+ *     Note: this filter is applied before exchange routing — if RESOURCE_TYPES
+ *     excludes USER, no user.changed publish happens for USER events either.
  */
 public class RabbitMqEventListenerProviderFactory implements EventListenerProviderFactory {
 
@@ -51,6 +61,8 @@ public class RabbitMqEventListenerProviderFactory implements EventListenerProvid
     private Connection connection;
     private Channel channel;
     private String queueName;
+    private String tenantChangedExchange;
+    private String userChangedExchange;
 
     // null/empty set = no filter applied = publish everything of that kind
     private Set<EventType> allowedEventTypes = Collections.emptySet();
@@ -58,7 +70,9 @@ public class RabbitMqEventListenerProviderFactory implements EventListenerProvid
 
     @Override
     public EventListenerProvider create(KeycloakSession session) {
-        return new RabbitMqEventListenerProvider(channel, queueName, allowedEventTypes, allowedResourceTypes);
+        return new RabbitMqEventListenerProvider(
+                channel, queueName, tenantChangedExchange, userChangedExchange,
+                allowedEventTypes, allowedResourceTypes);
     }
 
     @Override
@@ -68,6 +82,8 @@ public class RabbitMqEventListenerProviderFactory implements EventListenerProvid
         String username = config.get("username", "guest");
         String password = config.get("password", "guest");
         queueName = config.get("queue", "keycloak-events");
+        tenantChangedExchange = config.get("tenant-changed-exchange", "tenant.changed");
+        userChangedExchange = config.get("user-changed-exchange", "user.changed");
 
         allowedEventTypes = parseEventTypes(config.get("event-types", ""));
         allowedResourceTypes = parseResourceTypes(config.get("resource-types", ""));
@@ -90,8 +106,13 @@ public class RabbitMqEventListenerProviderFactory implements EventListenerProvid
             channel = connection.createChannel();
             // durable=true so the queue survives a RabbitMQ restart
             channel.queueDeclare(queueName, true, false, false, null);
+            // Fanout exchanges for tenant/user changes — declared here only; queues and
+            // bindings on them are each consuming domain's own responsibility.
+            channel.exchangeDeclare(tenantChangedExchange, "fanout", true);
+            channel.exchangeDeclare(userChangedExchange, "fanout", true);
 
-            log.infof("RabbitMQ event listener connected to %s:%d, queue '%s'", host, port, queueName);
+            log.infof("RabbitMQ event listener connected to %s:%d, queue '%s', exchanges '%s'/'%s'",
+                    host, port, queueName, tenantChangedExchange, userChangedExchange);
         } catch (IOException | TimeoutException e) {
             log.error("Failed to connect to RabbitMQ for event listener", e);
         }

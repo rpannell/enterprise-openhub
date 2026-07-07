@@ -191,6 +191,53 @@ happy to add that if you hit that need.
   (`http://localhost:<rabbitmq-management-port>`) — you should see a
   message land in the `keycloak-events` queue.
 
+## Tenant/user change fan-out
+
+Admin events for `ResourceType.ORGANIZATION`, `ResourceType.USER`, and
+`ResourceType.ORGANIZATION_MEMBERSHIP` are **not** published to the `keycloak-events`
+queue above — they're routed to two durable **fanout exchanges** instead, so any
+number of domains can each bind their own queue and get a copy. The user-facing
+`Event` stream (LOGIN/LOGOUT/etc.) is unaffected and still goes to `keycloak-events`.
+
+| ResourceType | Exchange | Env var (default) |
+|---|---|---|
+| `ORGANIZATION` | `tenant.changed` | `KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_TENANT_CHANGED_EXCHANGE` |
+| `USER`, `ORGANIZATION_MEMBERSHIP` | `user.changed` | `KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_USER_CHANGED_EXCHANGE` |
+
+This factory only ever **declares** these two exchanges (durable fanout) — it never
+declares or binds a queue on them. Each domain that wants tenant/user changes is
+responsible for creating and binding its own queue; see
+`OpenHub.Platform.IdentityEvents.Contracts/README.md` for the full pattern and
+`OpenHub.ProductManager.IdentityEventProcessor` for a working example consumer.
+
+The `RESOURCE_TYPES` filter described above still applies *before* this routing — if
+`RESOURCE_TYPES` excludes `USER`, no `user.changed` publish happens for `USER` events
+either.
+
+The message body published to these exchanges is **not** raw Keycloak `AdminEvent`
+JSON — it's a small custom shape (`TenantChangedEventDto` / `UserChangedEventDto`)
+so downstream .NET consumers never take a dependency on Keycloak's internal event
+model:
+
+```json
+// tenant.changed
+{ "EventType": "TenantChanged", "TenantId": "<org id>", "RealmSlug": "client-a",
+  "Operation": "Updated", "OccurredAtUtc": "2026-07-07T12:00:00Z", "Name": "Acme Corp" }
+
+// user.changed
+{ "EventType": "UserChanged", "UserId": "<user id>", "TenantId": "<org id or null>",
+  "RealmSlug": "client-a", "Operation": "Created", "OccurredAtUtc": "2026-07-07T12:00:00Z",
+  "Email": "a@example.com", "FirstName": "Ada", "LastName": "Lovelace" }
+```
+
+`TenantId` on a `user.changed` message is only populated for `ORGANIZATION_MEMBERSHIP`
+events (a user being added to/removed from an organization) — a plain `USER`
+create/update/delete admin event has no organization in its `resourcePath`, so it's
+left `null`. `Name`/`Email`/`FirstName`/`LastName` are read from the admin event's
+`representation` JSON, which requires `adminEventsDetailsEnabled: true` on the realm
+(already set in `client-a-realm.json`/`client-b-realm.json`) — if representation
+details are off, these fields come through as `null`.
+
 ## Troubleshooting
 
 - **Provider doesn't load at all / no log line on startup**: usually a

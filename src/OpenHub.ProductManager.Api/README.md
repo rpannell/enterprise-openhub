@@ -162,6 +162,19 @@ The audience does **not** vary per tenant — it identifies the target service, 
 
 If a service needs to call multiple APIs (e.g., both `product-manager` and `inventory-manager`), configure the Keycloak audience mapper to include multiple values, or obtain separate tokens per API.
 
+### Platform-admin authentication (cross-tenant endpoints)
+
+`/api/v1/admin/*` endpoints (currently: `GET /api/v1/admin/tenants`) are cross-tenant by nature — they can't be scoped to a single realm the way every other endpoint is, so they use a separate `"AdminScope"` authorization policy instead of the default per-tenant token flow. `TenantMiddleware` still runs but no-ops for these requests, since a platform-admin token has no `tenant_id` claim.
+
+Setup:
+
+1. Create a dedicated Keycloak realm (e.g. `platform-admin`) — do not reuse a tenant realm.
+2. In that realm, create a client with **Service Accounts Enabled** (Client Credentials grant).
+3. Add a mapper on that client's dedicated scope that sets a `scope` claim (or adds to an existing one) containing `product-manager-admin`.
+4. Set `KeyCloak:M2M:ClientSecrets:platform-admin` to that client's secret — the same `KeyCloak:M2M` configuration section and `IKeyCloakM2MTokenAccessor.GetTokenAsync(realmSlug, ct)` used for per-tenant M2M calls elsewhere works unchanged by passing `"platform-admin"` as the realm slug.
+
+Only services that genuinely need cross-tenant access (e.g. the scheduled full-catalog reindex job) should hold this client's secret.
+
 ---
 
 ## Configuration reference
@@ -205,6 +218,7 @@ All routes are versioned under `/api/v{version}/`.
 | `POST` | `/api/v1/products` | Create a product |
 | `PUT` | `/api/v1/products/{id}` | Update a product |
 | `DELETE` | `/api/v1/products/{id}` | Soft-delete a product |
+| `GET` | `/api/v1/admin/tenants` | List active tenants (platform-admin only — see Authentication) |
 
 Full request/response schemas are in the Scalar UI at `/api-docs`.
 
