@@ -43,6 +43,11 @@ dist/
 .env.local
 .env.*.local
 
+# ── Seed data ────────────────────────────────────────────────────────────────
+
+# Large generated/imported catalogs for OpenHub.ProductManager.SeedTool's --csv-file mode
+product_catalog_*.csv
+
 # ── Editors / OS ─────────────────────────────────────────────────────────────
 
 .vscode/

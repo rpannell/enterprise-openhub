@@ -4,8 +4,10 @@ import { Pencil, Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "../../../components/DataTable";
 import { productManagerApi } from "../../../services/productManagerApi";
-import type { Product } from "../types";
+import type { LookupsResponse, Product } from "../types";
 import { useAuth } from "../../../auth/AuthProvider";
+
+const PAGE_SIZE = 25;
 
 function Badge({ value, active }: { value: string; active: boolean }) {
   return (
@@ -21,22 +23,65 @@ function Badge({ value, active }: { value: string; active: boolean }) {
   );
 }
 
+function FilterSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-accent focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+    />
+  );
+}
+
 export default function ProductList() {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
   const canManage = hasRole("product-manager");
 
+  const [lookups, setLookups] = useState<LookupsResponse | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [pageIndex, setPageIndex] = useState(0);
+  const [search, setSearch] = useState("");
+  const [manufacturerId, setManufacturerId] = useState("");
+  const [brandId, setBrandId] = useState("");
+  const [conditionTypeId, setConditionTypeId] = useState("");
+  const [availabilityStatusId, setAvailabilityStatusId] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
+  const [publishedFilter, setPublishedFilter] = useState<"" | "true" | "false">("");
+
   useEffect(() => {
+    productManagerApi.getLookups().then(setLookups);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
     productManagerApi
-      .getProducts()
-      .then(setProducts)
+      .getProducts({
+        page: pageIndex + 1,
+        pageSize: PAGE_SIZE,
+        search: search || undefined,
+        manufacturerId: manufacturerId || undefined,
+        brandId: brandId || undefined,
+        conditionTypeId: conditionTypeId || undefined,
+        availabilityStatusId: availabilityStatusId || undefined,
+        isActive: activeFilter === "" ? undefined : activeFilter === "true",
+        isPublished: publishedFilter === "" ? undefined : publishedFilter === "true",
+      })
+      .then((page) => {
+        setProducts(page.items);
+        setTotalRows(page.totalCount);
+      })
       .catch(() => setError("Failed to load products."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [pageIndex, search, manufacturerId, brandId, conditionTypeId, availabilityStatusId, activeFilter, publishedFilter]);
+
+  // Reset to page 1 whenever a filter or the search term changes
+  useEffect(() => {
+    setPageIndex(0);
+  }, [search, manufacturerId, brandId, conditionTypeId, availabilityStatusId, activeFilter, publishedFilter]);
 
   const columns: ColumnDef<Product, any>[] = [
     { accessorKey: "sku", header: "SKU" },
@@ -109,8 +154,45 @@ export default function ProductList() {
 
   return (
     <div>
-      {canManage && (
-        <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterSelect value={manufacturerId} onChange={(e) => setManufacturerId(e.target.value)}>
+            <option value="">All Manufacturers</option>
+            {lookups?.manufacturers.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </FilterSelect>
+          <FilterSelect value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+            <option value="">All Brands</option>
+            {lookups?.brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </FilterSelect>
+          <FilterSelect value={conditionTypeId} onChange={(e) => setConditionTypeId(e.target.value)}>
+            <option value="">All Conditions</option>
+            {lookups?.conditionTypes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </FilterSelect>
+          <FilterSelect value={availabilityStatusId} onChange={(e) => setAvailabilityStatusId(e.target.value)}>
+            <option value="">All Statuses</option>
+            {lookups?.availabilityStatuses.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </FilterSelect>
+          <FilterSelect value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}>
+            <option value="">Active + Inactive</option>
+            <option value="true">Active only</option>
+            <option value="false">Inactive only</option>
+          </FilterSelect>
+          <FilterSelect value={publishedFilter} onChange={(e) => setPublishedFilter(e.target.value as typeof publishedFilter)}>
+            <option value="">Published + Draft</option>
+            <option value="true">Published only</option>
+            <option value="false">Draft only</option>
+          </FilterSelect>
+        </div>
+
+        {canManage && (
           <button
             onClick={() => navigate("/product/catalog/new")}
             className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90"
@@ -118,13 +200,22 @@ export default function ProductList() {
             <Plus size={16} />
             Add Product
           </button>
-        </div>
-      )}
+        )}
+      </div>
       <DataTable
         data={products}
         columns={columns}
-        searchPlaceholder="Search products…"
+        searchPlaceholder="Search by SKU or name…"
         loading={loading}
+        pageSize={PAGE_SIZE}
+        manualPagination
+        pageIndex={pageIndex}
+        pageCount={Math.max(Math.ceil(totalRows / PAGE_SIZE), 1)}
+        onPageChange={setPageIndex}
+        totalRows={totalRows}
+        manualFiltering
+        searchValue={search}
+        onSearchChange={setSearch}
       />
     </div>
   );

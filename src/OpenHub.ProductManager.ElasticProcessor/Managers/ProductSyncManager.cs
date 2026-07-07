@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
+using OpenHub.Accessor.ElasticIndex.Interfaces;
 using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.ProductManager.Contracts;
 using OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 using OpenHub.ProductManager.ElasticProcessor.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.ElasticProcessor.Managers.Interfaces;
 
@@ -10,6 +12,7 @@ namespace OpenHub.ProductManager.ElasticProcessor.Managers;
 public class ProductSyncManager(
     IKeyCloakM2MTokenAccessor m2mAccessor,
     IProductManagerApiAccessor productApiAccessor,
+    IElasticIndexAccessor<ProductDocument> productIndexAccessor,
     IProductSyncEngine engine,
     ILogger<ProductSyncManager> logger) : IProductSyncManager
 {
@@ -17,8 +20,9 @@ public class ProductSyncManager(
     {
         if (!engine.ShouldFetchProduct(evt))
         {
+            await productIndexAccessor.DeleteDocumentAsync(evt.ProductId, ct);
             logger.LogInformation(
-                "Product {ProductId} (tenant {TenantId}) was deleted — skipping fetch.",
+                "Product {ProductId} (tenant {TenantId}) was deleted — removed from Elasticsearch.",
                 evt.ProductId, evt.TenantId);
             return;
         }
@@ -34,9 +38,13 @@ public class ProductSyncManager(
             return;
         }
 
-        // TODO: write to Elastic — deferred until the indexing design is finalized.
+        var document = engine.BuildDocument(product, evt);
+
+        await productIndexAccessor.EnsureTenantProvisionedAsync(evt.TenantId, ct);
+        await productIndexAccessor.IndexDocumentAsync(document, ct);
+
         logger.LogInformation(
-            "Fetched product {ProductId} ('{Sku}') for tenant {TenantId}.",
+            "Indexed product {ProductId} ('{Sku}') for tenant {TenantId}.",
             product.Id, product.Sku, evt.TenantId);
     }
 }

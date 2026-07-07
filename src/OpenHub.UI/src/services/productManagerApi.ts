@@ -5,6 +5,8 @@ import type {
   LookupsResponse,
   LookupItem,
   Product,
+  ProductListParams,
+  PagedProducts,
 } from "../modules/product/types";
 
 const BASE = "/pm";
@@ -34,8 +36,21 @@ export const productManagerApi = {
   getLookups: (): Promise<LookupsResponse> =>
     apiFetch("/api/v1/lookups").then((r) => r.json()),
 
-  getProducts: (): Promise<Product[]> =>
-    apiFetch("/api/v1/products").then((r) => r.json()),
+  getProducts: (params: ProductListParams = {}): Promise<PagedProducts> => {
+    const query = new URLSearchParams();
+    if (params.page !== undefined) query.set("page", String(params.page));
+    if (params.pageSize !== undefined) query.set("pageSize", String(params.pageSize));
+    if (params.search) query.set("search", params.search);
+    if (params.manufacturerId) query.set("manufacturerId", params.manufacturerId);
+    if (params.brandId) query.set("brandId", params.brandId);
+    if (params.conditionTypeId) query.set("conditionTypeId", params.conditionTypeId);
+    if (params.availabilityStatusId) query.set("availabilityStatusId", params.availabilityStatusId);
+    if (params.isActive !== undefined) query.set("isActive", String(params.isActive));
+    if (params.isPublished !== undefined) query.set("isPublished", String(params.isPublished));
+
+    const qs = query.toString();
+    return apiFetch(`/api/v1/products${qs ? `?${qs}` : ""}`).then((r) => r.json());
+  },
 
   getProduct: (id: string): Promise<Product> =>
     apiFetch(`/api/v1/products/${id}`).then((r) => r.json()),

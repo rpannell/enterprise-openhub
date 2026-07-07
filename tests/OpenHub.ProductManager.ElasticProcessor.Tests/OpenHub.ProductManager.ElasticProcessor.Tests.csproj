@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageReference Include="Rebus" Version="8.9.2" />
+    <PackageReference Include="Testcontainers.Elasticsearch" Version="4.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageReference Include="NSubstitute" Version="5.3.0" />
@@ -23,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenHub.ProductManager.ElasticProcessor\OpenHub.ProductManager.ElasticProcessor.csproj" />
     <ProjectReference Include="..\..\src\OpenHub.ProductManager.Contracts\OpenHub.ProductManager.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\OpenHub.Accessor.ElasticIndex\OpenHub.Accessor.ElasticIndex.csproj" />
   </ItemGroup>
 
 </Project>

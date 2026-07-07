@@ -22,17 +22,30 @@ public static class ProductEndpoints
             .WithTags("Products");
 
         group.MapGet("/", async (
+            [AsParameters] ProductListRequest request,
             IProductManager manager,
             ProductMapper mapper,
             CancellationToken ct) =>
         {
-            var dtos = await manager.GetAllAsync(ct);
-            return Results.Ok(mapper.ToResponseList(dtos));
+            var (dtos, totalCount) = await manager.GetPagedAsync(request, ct);
+            var response = new PagedResponse<ProductResponse>
+            {
+                Items = [.. mapper.ToResponseList(dtos)],
+                Page = request.Page,
+                PageSize = request.PageSize,
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)request.PageSize)
+            };
+            return Results.Ok(response);
         })
         .WithName("GetProducts")
-        .WithSummary("List all products")
-        .WithDescription("Returns all active, non-deleted products belonging to the authenticated tenant. Results are automatically scoped to the caller's tenant via Row Level Security.")
-        .Produces<List<ProductResponse>>(StatusCodes.Status200OK);
+        .WithSummary("List products (paged)")
+        .WithDescription("Returns a page of non-deleted products belonging to the authenticated tenant, ordered by name. " +
+            "Supports search (SKU/name), and filtering by manufacturer, brand, condition, availability status, active, " +
+            "and published flags. Results are automatically scoped to the caller's tenant via Row Level Security.")
+        .Produces<PagedResponse<ProductResponse>>(StatusCodes.Status200OK)
+        .ProducesValidationProblem()
+        .AddEndpointFilter<ValidationFilter<ProductListRequest>>();
 
         group.MapGet("/{id:guid}", async (
             Guid id,
