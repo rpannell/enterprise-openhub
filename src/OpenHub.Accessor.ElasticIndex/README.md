@@ -58,10 +58,31 @@ services.AddElasticIndexAccessor<ProductDocument>();
 ```csharp
 // Wherever you orchestrate writes (a Manager, in iDesign terms)
 await indexAccessor.EnsureTenantProvisionedAsync(tenantId, ct);
-await indexAccessor.IndexDocumentAsync(document, ct);
+await indexAccessor.IndexDocumentAsync(document, ct);   // writes through the tenant's alias, not a hardcoded index name
 // ...
-await indexAccessor.DeleteDocumentAsync(id, ct);
+await indexAccessor.DeleteDocumentAsync(tenantId, id, ct);
 ```
+
+## Full reindex (versioned index + per-tenant cutover)
+
+A full reindex writes into a brand-new, timestamped index and re-points each tenant's alias to it as soon as that tenant's data is written — not a single global swap, so one slow/large tenant doesn't hold up the others:
+
+```csharp
+var newIndex = await indexAccessor.CreateVersionedIndexAsync(ct);   // e.g. "products-20260707020000"
+
+foreach (var tenantId in tenantIds)
+{
+    // ...page through source data, build documents...
+    var failedIds = await indexAccessor.BulkIndexDocumentsAsync(newIndex, batch, ct);
+    // caller decides whether the failure rate is tolerable before cutting over
+    await indexAccessor.EnsureTenantProvisionedAsync(tenantId, ct);
+    await indexAccessor.RepointTenantAliasAsync(tenantId, newIndex, ct);
+}
+
+await indexAccessor.DeleteIndexIfUnreferencedAsync(previousIndexName, ct); // only once nothing points at it anymore
+```
+
+Because per-document writes always go through the tenant's alias (see above), the trickle-feed consumer needs no awareness of which index is "current" — it keeps working correctly before, during, and after a tenant's cutover.
 
 `AddElasticIndexAccessor<TDocument>()` registers, per closed generic type:
 - `IElasticIndexAccessor<TDocument>` (singleton)

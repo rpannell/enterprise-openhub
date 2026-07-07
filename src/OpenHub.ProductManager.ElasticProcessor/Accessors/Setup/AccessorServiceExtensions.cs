@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenHub.Accessor.ElasticIndex.Extensions;
+using OpenHub.ProductManager.Contracts;
 using OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
-using OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 
 namespace OpenHub.ProductManager.ElasticProcessor.Accessors.Setup;
 

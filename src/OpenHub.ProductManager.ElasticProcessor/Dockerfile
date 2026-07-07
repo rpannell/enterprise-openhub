@@ -13,6 +13,7 @@ WORKDIR /src
 COPY ["OpenHub.ProductManager.ElasticProcessor/OpenHub.ProductManager.ElasticProcessor.csproj", "OpenHub.ProductManager.ElasticProcessor/"]
 COPY ["OpenHub.Platform.ServiceDefaults/OpenHub.Platform.ServiceDefaults.csproj", "OpenHub.Platform.ServiceDefaults/"]
 COPY ["OpenHub.Accessor.KeyCloak/OpenHub.Accessor.KeyCloak.csproj", "OpenHub.Accessor.KeyCloak/"]
+COPY ["OpenHub.Accessor.ElasticIndex/OpenHub.Accessor.ElasticIndex.csproj", "OpenHub.Accessor.ElasticIndex/"]
 COPY ["OpenHub.ProductManager.Contracts/OpenHub.ProductManager.Contracts.csproj", "OpenHub.ProductManager.Contracts/"]
 RUN dotnet restore "OpenHub.ProductManager.ElasticProcessor/OpenHub.ProductManager.ElasticProcessor.csproj"
 

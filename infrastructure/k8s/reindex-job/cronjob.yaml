@@ -1,0 +1,40 @@
+# The `schedule` field below is the ONLY place a schedule exists for this job — the
+# .NET app itself (OpenHub.ProductManager.ReindexJob) has no timer/cron logic; it runs
+# one full reindex to completion and exits. Change cadence here, not in appsettings.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: product-reindex
+  namespace: reindex-job
+  labels:
+    app: product-reindex
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid   # never overlap two full reindexes
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1              # the job already retries internally (per-batch, per-tenant); don't blindly re-run a fully-failed job
+      activeDeadlineSeconds: 3600  # safety cap on a single run
+      template:
+        metadata:
+          labels:
+            app: product-reindex
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: product-reindex
+            image: openhub/product-manager-reindex-job:latest
+            envFrom:
+            - configMapRef:
+                name: product-reindex-env
+            - secretRef:
+                name: product-reindex-secrets
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "1"
