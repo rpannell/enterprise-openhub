@@ -44,6 +44,113 @@ public class TenantAccessor(
             UserCacheOptions,
             cancellationToken: ct);
 
+    public async Task<IReadOnlyList<TenantDto>> ListActiveAsync(CancellationToken ct = default)
+    {
+        var entities = await db.Tenants.AsNoTracking()
+            .Where(t => t.IsActive && t.DeletedAt == null)
+            .OrderBy(t => t.Name)
+            .ToListAsync(ct);
+
+        return [.. entities.Select(mapper.ToDto)];
+    }
+
+    public async Task SyncTenantAsync(
+        Guid tenantId, string realmSlug, string? name, bool isDeleted, CancellationToken ct = default)
+    {
+        var entity = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct);
+
+        if (entity is null)
+        {
+            if (isDeleted) return; // nothing to delete
+
+            entity = new TenantEntity
+            {
+                Id = tenantId,
+                Slug = realmSlug,
+                Name = string.IsNullOrWhiteSpace(name) ? realmSlug : name,
+                PlanTier = "standard",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            db.Tenants.Add(entity);
+        }
+        else if (isDeleted)
+        {
+            entity.IsActive = false;
+            entity.DeletedAt = DateTimeOffset.UtcNow;
+            entity.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(name)) entity.Name = name;
+            entity.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        // Invalidate rather than write-through: the next GetOrProvisionAsync repopulates from
+        // the row we just wrote, which is simpler than duplicating the mapping here.
+        await cache.RemoveAsync($"tenant:id:{tenantId}", ct);
+    }
+
+    public async Task SyncUserAsync(
+        Guid tenantId, string uniqueId, string? email, string? firstName, string? lastName,
+        bool isDeleted, CancellationToken ct = default)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await db.Database.ExecuteSqlRawAsync(
+                "SELECT set_config('app.current_tenant_id', {0}, true)", [tenantId.ToString()], ct);
+
+            var entity = await db.Users.FirstOrDefaultAsync(
+                u => u.TenantId == tenantId && u.UniqueId == uniqueId, ct);
+
+            if (entity is null)
+            {
+                if (isDeleted)
+                {
+                    await tx.CommitAsync(ct);
+                    return;
+                }
+
+                entity = new UserEntity
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    UniqueId = uniqueId,
+                    Email = string.IsNullOrWhiteSpace(email) ? uniqueId : email,
+                    FirstName = string.IsNullOrWhiteSpace(firstName) ? uniqueId : firstName,
+                    LastName = string.IsNullOrWhiteSpace(lastName) ? "-" : lastName,
+                    IsActive = true,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+                db.Users.Add(entity);
+            }
+            else if (isDeleted)
+            {
+                entity.IsActive = false;
+                entity.DeletedAt = DateTimeOffset.UtcNow;
+                entity.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(email)) entity.Email = email;
+                if (!string.IsNullOrWhiteSpace(firstName)) entity.FirstName = firstName;
+                if (!string.IsNullOrWhiteSpace(lastName)) entity.LastName = lastName;
+                entity.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
+
+        await cache.RemoveAsync($"user:{tenantId}:{uniqueId}", ct);
+    }
+
     private async Task<TenantDto?> ResolveOrProvisionTenantAsync(
         Guid tenantId, string realmSlug, CancellationToken ct)
     {

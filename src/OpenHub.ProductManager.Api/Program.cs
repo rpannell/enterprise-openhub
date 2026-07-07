@@ -49,6 +49,13 @@ if (!string.IsNullOrWhiteSpace(keycloakUrl))
 // ── Authentication — multi-realm Keycloak ────────────────────────────────────
 builder.AddOpenHubJwtAuthentication();
 
+// "AdminScope" gates the platform-admin endpoints (AdminEndpoints.cs) — a distinct M2M
+// client/realm from every per-tenant realm, carrying a "product-manager-admin" scope
+// claim. Deliberately separate from the default (tenant-scoped) authorization applied
+// elsewhere, since an admin token has no tenant_id claim for TenantMiddleware to resolve.
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("AdminScope", policy => policy.RequireClaim("scope", "product-manager-admin"));
+
 // ── API versioning ────────────────────────────────────────────────────────────
 builder.Services.AddApiVersioning(options =>
 {
@@ -90,5 +97,10 @@ app.MapProductEndpoints();
 app.MapLookupEndpoints();
 app.MapManufacturerEndpoints();
 app.MapBrandEndpoints();
+app.MapAdminEndpoints();
 
 app.Run();
+
+// Exposes the top-level-statement-generated Program class to WebApplicationFactory<Program> in
+// the test project (which otherwise can't see it — top-level statements generate it `internal`).
+public partial class Program;

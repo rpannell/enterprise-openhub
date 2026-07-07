@@ -95,6 +95,8 @@ if (useRabbitListener)
         .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_QUEUE", "keycloak-events")
         .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_EVENT_TYPES", "LOGIN,LOGOUT,LOGIN_ERROR,REGISTER")
         .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_RESOURCE_TYPES", "USER,ORGANIZATION,ORGANIZATION_MEMBERSHIP")
+        .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_TENANT_CHANGED_EXCHANGE", "tenant.changed")
+        .WithEnvironment("KC_SPI_EVENTS_LISTENER_RABBITMQ_EVENT_LISTENER_USER_CHANGED_EXCHANGE", "user.changed")
         .WaitFor(rabbitmq);
 }
 
@@ -112,6 +114,11 @@ var vaultSeed = builder.AddContainer("vault-seed", "hashicorp/vault")
     .WithEnvironment("RABBITMQ_PASSWORD", rabbitPass)
     .WaitFor(vault);
 
+// Non-superuser role ProductManager.Api actually connects as (see V1_8__create_app_role.sql) —
+// Postgres superusers bypass Row Level Security entirely, so the app must NOT connect as
+// "postgres" or the tenant_isolation policies on catalog.users/products/etc. are silent no-ops.
+var catalogAppUserPassword = builder.AddParameter("catalog-app-user-password", value: "Dev_AppUser_P@ss1!", secret: true);
+
 // Flyway runs schema migrations before the API starts
 var flywayPath = Path.Combine(builder.AppHostDirectory, "..", "Database", "ProductManager");
 var flyway = builder.AddContainer("flyway-catalog", "flyway/flyway", "latest")
@@ -123,6 +130,7 @@ var flyway = builder.AddContainer("flyway-catalog", "flyway/flyway", "latest")
     .WithEnvironment("FLYWAY_LOCATIONS", "filesystem:/flyway/sql")
     .WithEnvironment("FLYWAY_CONNECT_RETRIES", "10")
     .WithEnvironment("FLYWAY_CONNECT_RETRIES_INTERVAL", "3")
+    .WithEnvironment("FLYWAY_PLACEHOLDERS_APP_USER_PASSWORD", catalogAppUserPassword)
     .WithArgs("repair", "migrate")
     .WaitFor(catalogDb);
 
@@ -139,6 +147,11 @@ var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>(
     .WithReference(catalogDb)
     .WithReference(redis)
     .WithReference(keycloak)
+    // Overrides the admin (postgres) connection string .WithReference(catalogDb) set above —
+    // must run as the non-superuser app_user role for Row Level Security to actually apply.
+    // See the comment on catalogAppUserPassword and V1_8__create_app_role.sql.
+    .WithEnvironment("ConnectionStrings__Catalog",
+        $"Host={postgres.Resource.Host};Port={postgres.Resource.Port};Username=app_user;Password={catalogAppUserPassword};Database=Catalog")
     .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("KeyCloak__AdminUsername", "admin")
     .WithEnvironment("KeyCloak__AdminPassword", keycloakAdminPassword)
@@ -166,10 +179,37 @@ var productManagerElasticProcessor = builder.AddProject<Projects.OpenHub_Product
     .WaitForCompletion(consulSeed)
     .WaitForCompletion(vaultSeed);
 
-// Only the nightly-reindex timer remains here — product sync moved to
-// product-manager-elastic-processor. No Keycloak/Vault/API dependency left.
-var productManagerFunction = builder.AddAzureFunctionsProject<Projects.OpenHub_ProductManager_Function>("product-manager-function")
+var productManagerIdentityEventProcessor = builder.AddProject<Projects.OpenHub_ProductManager_IdentityEventProcessor>("product-manager-identity-event-processor")
+    .WithReference(productManagerApi)
+    .WithReference(rabbitmq)
+    .WithReference(redis)
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
-    .WaitForCompletion(consulSeed);
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    .WaitFor(rabbitmq)
+    .WaitFor(keycloak)
+    .WaitFor(productManagerApi)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
+
+// One-shot full-catalog reindex — not a long-running service, so it isn't started
+// automatically like the resources above. Trigger a manual run from the Aspire
+// dashboard; in production this same image runs on a schedule via a Kubernetes
+// CronJob (infrastructure/k8s/reindex-job/cronjob.yaml).
+var productManagerReindexJob = builder.AddProject<Projects.OpenHub_ProductManager_ReindexJob>("product-manager-reindex-job")
+    .WithReference(productManagerApi)
+    .WithReference(redis)
+    .WithReference(elasticsearch)
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    .WithExplicitStart()
+    .WaitFor(keycloak)
+    .WaitFor(productManagerApi)
+    .WaitFor(elasticsearch)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
 
 builder.Build().Run();

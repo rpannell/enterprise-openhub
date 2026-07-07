@@ -24,7 +24,9 @@
     { "name": "product-manager-function.product-changed", "vhost": "/", "durable": true }
   ],
   "exchanges": [
-    { "name": "product.changed", "vhost": "/", "type": "fanout", "durable": true, "auto_delete": false, "internal": false, "arguments": {} }
+    { "name": "product.changed", "vhost": "/", "type": "fanout", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
+    { "name": "tenant.changed", "vhost": "/", "type": "fanout", "durable": true, "auto_delete": false, "internal": false, "arguments": {} },
+    { "name": "user.changed", "vhost": "/", "type": "fanout", "durable": true, "auto_delete": false, "internal": false, "arguments": {} }
   ],
   "bindings": [
     { "source": "product.changed", "vhost": "/", "destination": "product-manager-function.product-changed", "destination_type": "queue", "routing_key": "", "arguments": {} }
