@@ -8,4 +8,8 @@
     <RootNamespace>OpenHub.ProductManager.Contracts</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\OpenHub.Accessor.ElasticIndex\OpenHub.Accessor.ElasticIndex.csproj" />
+  </ItemGroup>
+
 </Project>

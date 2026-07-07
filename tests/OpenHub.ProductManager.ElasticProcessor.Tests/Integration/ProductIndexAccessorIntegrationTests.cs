@@ -8,7 +8,7 @@ using Shouldly;
 using Xunit;
 using OpenHub.Accessor.ElasticIndex;
 using OpenHub.Accessor.ElasticIndex.Interfaces;
-using OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
+using OpenHub.ProductManager.Contracts;
 
 namespace OpenHub.ProductManager.ElasticProcessor.Tests.Integration;
 
@@ -157,7 +157,7 @@ public class ProductIndexAccessorIntegrationTests(ElasticsearchCollectionFixture
         await accessor.EnsureTenantProvisionedAsync(tenantId);
         await accessor.IndexDocumentAsync(new ProductDocument { Id = productId, TenantId = tenantId, Sku = "S-2", Name = "ToDelete" });
 
-        await accessor.DeleteDocumentAsync(productId);
+        await accessor.DeleteDocumentAsync(tenantId, productId);
 
         var bootstrapClient = CreateBootstrapClient(fixture.ConnectionString);
         var refreshResponse = await bootstrapClient.Indices.RefreshAsync(ProductDocument.IndexName);
@@ -191,5 +191,85 @@ public class ProductIndexAccessorIntegrationTests(ElasticsearchCollectionFixture
 
         var rawIndexResponse = await tenantAReaderClient.SearchAsync<ProductDocument>(s => s.Indices(ProductDocument.IndexName));
         rawIndexResponse.IsValidResponse.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task FullReindexCutover_MovesTenantAliasAndTrickleWritesLandInNewIndex()
+    {
+        var accessor = CreateAccessor(out _);
+        await accessor.InitializeAsync();
+
+        var tenantId = Guid.NewGuid();
+        var oldProductId = Guid.NewGuid();
+        await accessor.EnsureTenantProvisionedAsync(tenantId);
+        await accessor.IndexDocumentAsync(new ProductDocument { Id = oldProductId, TenantId = tenantId, Sku = "OLD-1", Name = "Pre-reindex" });
+
+        var newIndexName = await accessor.CreateVersionedIndexAsync();
+        var reindexedProductId = Guid.NewGuid();
+        var failedIds = await accessor.BulkIndexDocumentsAsync(newIndexName,
+            [new ProductDocument { Id = reindexedProductId, TenantId = tenantId, Sku = "NEW-1", Name = "Reindexed" }]);
+        failedIds.ShouldBeEmpty();
+
+        await accessor.RepointTenantAliasAsync(tenantId, newIndexName);
+
+        var bootstrapClient = CreateBootstrapClient(fixture.ConnectionString);
+        var refreshResponse = await bootstrapClient.Indices.RefreshAsync(newIndexName);
+        refreshResponse.IsValidResponse.ShouldBeTrue(refreshResponse.DebugInformation);
+
+        // Alias now resolves only to the new index's document, not the pre-cutover one.
+        var aliasResponse = await bootstrapClient.SearchAsync<ProductDocument>(s => s.Indices($"products-tenant-{tenantId}"));
+        aliasResponse.Documents.ShouldContain(d => d.Id == reindexedProductId);
+        aliasResponse.Documents.ShouldNotContain(d => d.Id == oldProductId);
+
+        // A trickle-style write after cutover goes through the alias, landing in the new index automatically.
+        var postCutoverProductId = Guid.NewGuid();
+        await accessor.IndexDocumentAsync(new ProductDocument { Id = postCutoverProductId, TenantId = tenantId, Sku = "NEW-2", Name = "Post-cutover" });
+        await bootstrapClient.Indices.RefreshAsync(newIndexName);
+
+        var postCutoverResponse = await bootstrapClient.SearchAsync<ProductDocument>(s => s.Indices(newIndexName));
+        postCutoverResponse.Documents.ShouldContain(d => d.Id == postCutoverProductId);
+    }
+
+    [Fact]
+    public async Task DeleteIndexIfUnreferencedAsync_RefusesToDeleteAnIndexStillAliased()
+    {
+        var accessor = CreateAccessor(out _);
+        await accessor.InitializeAsync();
+
+        var tenantId = Guid.NewGuid();
+        await accessor.EnsureTenantProvisionedAsync(tenantId);
+
+        await Should.NotThrowAsync(() => accessor.DeleteIndexIfUnreferencedAsync(ProductDocument.IndexName));
+
+        var bootstrapClient = CreateBootstrapClient(fixture.ConnectionString);
+        var existsResponse = await bootstrapClient.Indices.ExistsAsync(ProductDocument.IndexName);
+        existsResponse.Exists.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteIndexIfUnreferencedAsync_DeletesOnceNoAliasPointsAtIt()
+    {
+        var accessor = CreateAccessor(out _);
+        await accessor.InitializeAsync();
+
+        var tenantId = Guid.NewGuid();
+        await accessor.EnsureTenantProvisionedAsync(tenantId);
+
+        // Deliberately does not target the shared legacy ProductDocument.IndexName here — other
+        // tests in this same integration run leave their own tenants aliased to it, so it would
+        // always be "still referenced" for reasons unrelated to this test. Instead, cut this one
+        // tenant over twice, between two versioned indices it exclusively owns, to prove deletion
+        // is gated on the live alias state rather than a caller-trusted "I'm done with it" flag.
+        var firstVersionedIndex = await accessor.CreateVersionedIndexAsync();
+        await accessor.RepointTenantAliasAsync(tenantId, firstVersionedIndex);
+
+        var secondVersionedIndex = await accessor.CreateVersionedIndexAsync();
+        await accessor.RepointTenantAliasAsync(tenantId, secondVersionedIndex);
+
+        await accessor.DeleteIndexIfUnreferencedAsync(firstVersionedIndex);
+
+        var bootstrapClient = CreateBootstrapClient(fixture.ConnectionString);
+        var existsResponse = await bootstrapClient.Indices.ExistsAsync(firstVersionedIndex);
+        existsResponse.Exists.ShouldBeFalse();
     }
 }

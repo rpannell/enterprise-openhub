@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using OpenHub.Accessor.ElasticIndex.Models;
 
-namespace OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
+namespace OpenHub.ProductManager.Contracts;
 
 /// <summary>
 /// Elasticsearch document shape for the shared "products" index. Distinct from
@@ -11,6 +11,10 @@ namespace OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 /// must match the "tenant_id" field name the per-tenant alias filter is defined
 /// against exactly, since the client's default camelCase naming would otherwise
 /// silently break that filter.
+///
+/// Lives in Contracts (not ElasticProcessor) so both the trickle-feed consumer
+/// (ElasticProcessor) and the full-catalog reindex job write the identical shape
+/// into Elasticsearch — duplicating this type risks the two drifting apart.
 /// </summary>
 public class ProductDocument : ITenantScopedDocument
 {

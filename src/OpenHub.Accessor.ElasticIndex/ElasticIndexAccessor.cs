@@ -1,4 +1,5 @@
 using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch.IndexManagement;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -8,12 +9,19 @@ using OpenHub.Accessor.ElasticIndex.Models;
 namespace OpenHub.Accessor.ElasticIndex;
 
 /// <summary>
-/// Owns all Elasticsearch I/O for one shared index (TDocument.IndexName): index
+/// Owns all Elasticsearch I/O for one shared index family (TDocument.IndexName): index
 /// bootstrap, per-tenant filtered aliases, and API-key issuance. Tenant isolation
 /// is enforced the same way OpenHub enforces it in Postgres (FORCE ROW LEVEL
 /// SECURITY) — at the data-access boundary, not by trusting the caller: a
 /// per-tenant alias filtered to that tenant's documents, and a per-tenant API
 /// key whose role descriptor restricts it to only that alias.
+///
+/// Per-document writes (IndexDocumentAsync/DeleteDocumentAsync) always go through a
+/// tenant's alias, never a hardcoded index name — this is what lets a full reindex
+/// (CreateVersionedIndexAsync + BulkIndexDocumentsAsync + RepointTenantAliasAsync) move
+/// one tenant's alias to a new backing index without any change needed here or in
+/// callers: the next per-document write for that tenant transparently lands in
+/// whichever index its alias currently targets.
 ///
 /// The client injected here (via the consuming service's
 /// builder.AddElasticsearchClient call) authenticates as the Elasticsearch
@@ -117,20 +125,131 @@ public class ElasticIndexAccessor<TDocument>(
     public async Task IndexDocumentAsync(TDocument document, CancellationToken ct = default)
     {
         var client = await GetWriterClientAsync(ct);
-        var response = await client.IndexAsync(document, i => i.Index(IndexName).Id(document.Id.ToString()), ct);
+        var alias = AliasName(document.TenantId);
+        var response = await client.IndexAsync(document, i => i.Index(alias).Id(document.Id.ToString()), ct);
 
         if (!response.IsValidResponse)
             throw new InvalidOperationException($"Failed to index document {document.Id}: {response.DebugInformation}");
     }
 
-    public async Task DeleteDocumentAsync(Guid id, CancellationToken ct = default)
+    public async Task DeleteDocumentAsync(Guid tenantId, Guid id, CancellationToken ct = default)
     {
         var client = await GetWriterClientAsync(ct);
-        var response = await client.DeleteAsync(IndexName, id.ToString(), ct);
+        var response = await client.DeleteAsync(AliasName(tenantId), id.ToString(), ct);
 
         // NotFound is a valid outcome (nothing to delete) — only a real failure should throw.
         if (!response.IsValidResponse && response.Result != Result.NotFound)
             throw new InvalidOperationException($"Failed to delete document {id}: {response.DebugInformation}");
+    }
+
+    public async Task<string> CreateVersionedIndexAsync(CancellationToken ct = default)
+    {
+        var client = await GetWriterClientAsync(ct);
+        // fffffff (ticks) rather than just seconds — a full reindex run only calls this once,
+        // but tests and any manual re-trigger in quick succession would otherwise collide on
+        // the same name within the same second.
+        var versionedIndexName = $"{IndexName}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfffffff}";
+
+        // Same tenant_id-only explicit mapping as EnsureIndexAsync — see the type-level
+        // remarks on why literal-string field mapping is required for a generic TDocument.
+        var response = await client.Indices.CreateAsync(versionedIndexName, c => c
+            .Mappings(m => m.Properties(p => p.Keyword("tenant_id"))),
+            ct);
+
+        if (!response.IsValidResponse)
+            throw new InvalidOperationException(
+                $"Failed to create versioned index '{versionedIndexName}': {response.DebugInformation}");
+
+        logger.LogInformation("Created versioned Elasticsearch index {IndexName}.", versionedIndexName);
+        return versionedIndexName;
+    }
+
+    public async Task<IReadOnlyList<Guid>> BulkIndexDocumentsAsync(string indexName, IReadOnlyList<TDocument> documents, CancellationToken ct = default)
+    {
+        if (documents.Count == 0)
+            return [];
+
+        var client = await GetWriterClientAsync(ct);
+        var response = await client.BulkAsync(b => b
+            .Index(indexName)
+            .IndexMany(documents, (descriptor, document) => descriptor.Id(document.Id.ToString())),
+            ct);
+
+        if (!response.IsValidResponse && !response.Errors)
+            throw new InvalidOperationException($"Bulk index request against '{indexName}' failed: {response.DebugInformation}");
+
+        if (!response.Errors)
+            return [];
+
+        var failedIds = new List<Guid>();
+        foreach (var item in response.Items)
+        {
+            if (item.Error is null)
+                continue;
+
+            if (Guid.TryParse(item.Id, out var failedId))
+                failedIds.Add(failedId);
+
+            logger.LogWarning(
+                "Bulk index of document {DocumentId} into {IndexName} failed: {Error}",
+                item.Id, indexName, item.Error.Reason);
+        }
+
+        return failedIds;
+    }
+
+    public async Task<IReadOnlyList<string>> RepointTenantAliasAsync(Guid tenantId, string newIndexName, CancellationToken ct = default)
+    {
+        var client = await GetWriterClientAsync(ct);
+        var alias = AliasName(tenantId);
+
+        var existingAliasIndices = await client.Indices.GetAliasAsync(a => a.Name(alias), ct);
+        var previousIndices = existingAliasIndices is { IsValidResponse: true, Values: not null }
+            ? existingAliasIndices.Values.Keys.Where(name => name != newIndexName).ToList()
+            : [];
+
+        // Each array element becomes its own "actions" entry in the _aliases request body —
+        // a single Action<IndexUpdateAliasesActionDescriptor> lambda can only ever populate
+        // ONE add/remove per JSON object, so remove(s) and the add must be separate elements,
+        // not separate method calls chained on the same descriptor (which silently drops all
+        // but the last call and leaves the alias pointing at both old and new indices).
+        var actions = previousIndices
+            .Select(previousIndex => (Action<IndexUpdateAliasesActionDescriptor>)(a => a.Remove(r => r.Index(previousIndex).Alias(alias))))
+            .Append(a => a.Add(add => add.Index(newIndexName).Alias(alias)
+                .Filter(f => f.Term(t => t.Field("tenant_id").Value(tenantId.ToString())))))
+            .ToArray();
+
+        var response = await client.Indices.UpdateAliasesAsync(u => u.Actions(actions), ct);
+
+        if (!response.IsValidResponse)
+            throw new InvalidOperationException(
+                $"Failed to repoint alias '{alias}' to '{newIndexName}': {response.DebugInformation}");
+
+        logger.LogInformation("Repointed alias {Alias} to {NewIndexName} (previously: {PreviousIndices}).",
+            alias, newIndexName, previousIndices.Count == 0 ? "none" : string.Join(", ", previousIndices));
+
+        return previousIndices;
+    }
+
+    public async Task DeleteIndexIfUnreferencedAsync(string indexName, CancellationToken ct = default)
+    {
+        var client = await GetWriterClientAsync(ct);
+
+        var aliasCheck = await client.Indices.GetAliasAsync(a => a.Indices(indexName), ct);
+        if (aliasCheck is { IsValidResponse: true, Values: not null }
+            && aliasCheck.Values.TryGetValue(indexName, out var indexAliases) && indexAliases.Aliases.Count > 0)
+        {
+            logger.LogWarning(
+                "Not deleting index {IndexName} — still referenced by alias(es): {Aliases}.",
+                indexName, string.Join(", ", indexAliases.Aliases.Keys));
+            return;
+        }
+
+        var response = await client.Indices.DeleteAsync(indexName, ct);
+        if (!response.IsValidResponse)
+            throw new InvalidOperationException($"Failed to delete index '{indexName}': {response.DebugInformation}");
+
+        logger.LogInformation("Deleted superseded Elasticsearch index {IndexName}.", indexName);
     }
 
     private async Task<ElasticsearchClient> GetWriterClientAsync(CancellationToken ct)
@@ -159,14 +278,16 @@ public class ElasticIndexAccessor<TDocument>(
                         // any privileges. This key only ever does index/alias/document
                         // I/O, so index-scoped privileges are all it needs.
                         // Elasticsearch's alias-management check (indices:admin/aliases,
-                        // used by PutAlias) authorizes against BOTH the source index and
-                        // the alias name being created — an exact-match pattern on just
-                        // IndexName is not enough to also create "{IndexName}-tenant-{id}"
-                        // aliases. Grant the index itself plus exactly this accessor's own
-                        // alias naming scheme — not a blanket "{IndexName}*" wildcard,
-                        // which could also cover an unrelated model's differently-named
-                        // index sharing the same prefix.
-                        .Indices(idx => idx.Names(IndexName, $"{IndexName}-tenant-*").Privileges("all")))),
+                        // used by PutAlias/UpdateAliases) authorizes against BOTH the
+                        // source index and the alias name being created — an exact-match
+                        // pattern on just IndexName is not enough to also create
+                        // "{IndexName}-tenant-{id}" aliases or "{IndexName}-{timestamp}"
+                        // versioned indices created by a full reindex. Grant the index
+                        // itself plus a single "{IndexName}-*" pattern that covers both —
+                        // not a blanket "{IndexName}*" (no dash), which could also cover
+                        // an unrelated model's differently-named index sharing the same
+                        // prefix without a separator.
+                        .Indices(idx => idx.Names(IndexName, $"{IndexName}-*").Privileges("all")))),
                     ct);
 
                 if (!keyResponse.IsValidResponse || keyResponse.Encoded is null)

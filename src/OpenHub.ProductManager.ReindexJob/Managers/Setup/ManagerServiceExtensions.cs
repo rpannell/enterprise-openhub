@@ -1,13 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
-using OpenHub.ProductManager.Function.Managers.Interfaces;
+using OpenHub.ProductManager.ReindexJob.Managers.Interfaces;
 
-namespace OpenHub.ProductManager.Function.Managers.Setup;
+namespace OpenHub.ProductManager.ReindexJob.Managers.Setup;
 
 public static class ManagerServiceExtensions
 {
     public static IServiceCollection AddManagers(this IServiceCollection services)
     {
-        services.AddScoped<INightlyIndexManager, NightlyIndexManager>();
+        services.AddScoped<IReindexManager, ReindexManager>();
         return services;
     }
 }

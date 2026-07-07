@@ -46,7 +46,7 @@ public class ProductSyncManagerTests
             _productIndexAccessor.EnsureTenantProvisionedAsync(evt.TenantId, Arg.Any<CancellationToken>());
             _productIndexAccessor.IndexDocumentAsync(document, Arg.Any<CancellationToken>());
         });
-        await _productIndexAccessor.DidNotReceive().DeleteDocumentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _productIndexAccessor.DidNotReceive().DeleteDocumentAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class ProductSyncManagerTests
 
         await _manager.HandleAsync(evt);
 
-        await _productIndexAccessor.Received(1).DeleteDocumentAsync(evt.ProductId, Arg.Any<CancellationToken>());
+        await _productIndexAccessor.Received(1).DeleteDocumentAsync(evt.TenantId, evt.ProductId, Arg.Any<CancellationToken>());
         await _productApiAccessor.DidNotReceive().GetProductByIdAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         await _productIndexAccessor.DidNotReceive().IndexDocumentAsync(Arg.Any<ProductDocument>(), Arg.Any<CancellationToken>());
     }

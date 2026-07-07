@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-reindex-env
+  namespace: reindex-job
+data:
+  ProductManagerApi__BaseUrl: http://product-manager-api.product-manager.svc.cluster.local
+  KeyCloak__BaseUrl: http://keycloak.keycloak.svc.cluster.local
+  ConnectionStrings__Redis: redis-cluster.redis.svc.cluster.local:6379
+  Consul__Url: http://consul.consul.svc.cluster.local:8500
+  Vault__Address: http://vault.vault.svc.cluster.local:8200
+  # Tuning overrides — omit any of these to fall back to appsettings.json defaults.
+  ReindexJob__PageSize: "200"
+  ReindexJob__BatchSize: "500"
+  ReindexJob__MaxBatchRetries: "3"
+  ReindexJob__TenantConcurrency: "2"
+  ReindexJob__FailureThresholdPercent: "5.0"

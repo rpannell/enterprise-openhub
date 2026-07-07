@@ -3,7 +3,6 @@ using OpenHub.Accessor.ElasticIndex.Interfaces;
 using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.ProductManager.Contracts;
 using OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
-using OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 using OpenHub.ProductManager.ElasticProcessor.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.ElasticProcessor.Managers.Interfaces;
 
@@ -20,7 +19,7 @@ public class ProductSyncManager(
     {
         if (!engine.ShouldFetchProduct(evt))
         {
-            await productIndexAccessor.DeleteDocumentAsync(evt.ProductId, ct);
+            await productIndexAccessor.DeleteDocumentAsync(evt.TenantId, evt.ProductId, ct);
             logger.LogInformation(
                 "Product {ProductId} (tenant {TenantId}) was deleted — removed from Elasticsearch.",
                 evt.ProductId, evt.TenantId);
