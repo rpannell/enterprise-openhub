@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.Seed
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.ElasticIndex", "OpenHub.Accessor.ElasticIndex\OpenHub.Accessor.ElasticIndex.csproj", "{CA9932A3-EDC6-4F9C-BF38-4048C7AC3477}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.Api.Tests", "..\tests\OpenHub.ProductManager.Api.Tests\OpenHub.ProductManager.Api.Tests.csproj", "{78D93357-38D1-4240-964B-EF4C2BD77550}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -197,6 +199,18 @@ Global
 		{CA9932A3-EDC6-4F9C-BF38-4048C7AC3477}.Release|x64.Build.0 = Release|Any CPU
 		{CA9932A3-EDC6-4F9C-BF38-4048C7AC3477}.Release|x86.ActiveCfg = Release|Any CPU
 		{CA9932A3-EDC6-4F9C-BF38-4048C7AC3477}.Release|x86.Build.0 = Release|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Debug|x64.Build.0 = Debug|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Debug|x86.Build.0 = Debug|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Release|Any CPU.Build.0 = Release|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Release|x64.ActiveCfg = Release|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Release|x64.Build.0 = Release|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Release|x86.ActiveCfg = Release|Any CPU
+		{78D93357-38D1-4240-964B-EF4C2BD77550}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
