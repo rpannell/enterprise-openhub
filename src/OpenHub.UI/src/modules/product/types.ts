@@ -58,6 +58,26 @@ export interface Product {
   prices: ProductPrice[];
 }
 
+export interface ProductListParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  manufacturerId?: string;
+  brandId?: string;
+  conditionTypeId?: string;
+  availabilityStatusId?: string;
+  isActive?: boolean;
+  isPublished?: boolean;
+}
+
+export interface PagedProducts {
+  items: Product[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
 export interface CreateProductRequest {
   sku: string;
   name: string;

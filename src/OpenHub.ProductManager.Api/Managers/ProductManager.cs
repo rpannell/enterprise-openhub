@@ -43,6 +43,24 @@ public class ProductManager(
         return productEngine.HydrateAll(dtos, manufacturers, brands, conditions, statuses, uoms);
     }
 
+    public async Task<(IReadOnlyList<ProductDto> Items, int TotalCount)> GetPagedAsync(ProductListRequest request, CancellationToken ct = default)
+    {
+        var (entities, totalCount) = await productAccessor.GetPagedAsync(
+            request.Page, request.PageSize, request.Search, request.ManufacturerId, request.BrandId,
+            request.ConditionTypeId, request.AvailabilityStatusId, request.IsActive, request.IsPublished, ct);
+
+        var dtos = mapper.ToDtoList(entities);
+
+        var manufacturers = await GetManufacturerNamesAsync(ct);
+        var brands = await GetBrandNamesAsync(ct);
+        var conditions = await lookupCache.GetConditionTypeNamesAsync(ct);
+        var statuses = await lookupCache.GetAvailabilityStatusNamesAsync(ct);
+        var uoms = await lookupCache.GetUomCodesAsync(ct);
+
+        var hydrated = productEngine.HydrateAll(dtos, manufacturers, brands, conditions, statuses, uoms);
+        return (hydrated, totalCount);
+    }
+
     public async Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var entity = await productAccessor.GetByIdAsync(id, ct);

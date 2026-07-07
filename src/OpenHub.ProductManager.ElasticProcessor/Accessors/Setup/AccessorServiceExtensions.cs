@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenHub.Accessor.ElasticIndex.Extensions;
 using OpenHub.ProductManager.ElasticProcessor.Accessors.Interfaces;
+using OpenHub.ProductManager.ElasticProcessor.Accessors.Models;
 
 namespace OpenHub.ProductManager.ElasticProcessor.Accessors.Setup;
 
@@ -26,6 +28,11 @@ public static class AccessorServiceExtensions
             var baseUrl = configuration["ProductManagerApi:BaseUrl"] ?? "https+http://product-manager-api";
             client.BaseAddress = new Uri(baseUrl);
         });
+
+        // Tenant-isolated Elasticsearch indexing for ProductDocument — see
+        // OpenHub.Accessor.ElasticIndex (shared across domains; helpdesk and
+        // others register their own document types the same way).
+        services.AddElasticIndexAccessor<ProductDocument>();
 
         return services;
     }

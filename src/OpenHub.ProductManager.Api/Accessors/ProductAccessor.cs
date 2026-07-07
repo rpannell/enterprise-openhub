@@ -47,6 +47,41 @@ public class ProductAccessor(CatalogDbContext db, IHttpContextAccessor http) : I
         });
     }
 
+    public async Task<(IReadOnlyList<ProductEntity> Items, int TotalCount)> GetPagedAsync(
+        int page, int pageSize, string? search, Guid? manufacturerId, Guid? brandId,
+        Guid? conditionTypeId, Guid? availabilityStatusId, bool? isActive, bool? isPublished,
+        CancellationToken ct = default)
+    {
+        var tenantId = TenantId;
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await SetTenantContextAsync(tenantId, ct);
+
+            var query = db.Products.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+                query = query.Where(p => EF.Functions.ILike(p.Sku, $"%{search}%") || EF.Functions.ILike(p.Name, $"%{search}%"));
+            if (manufacturerId.HasValue) query = query.Where(p => p.ManufacturerId == manufacturerId);
+            if (brandId.HasValue) query = query.Where(p => p.BrandId == brandId);
+            if (conditionTypeId.HasValue) query = query.Where(p => p.ConditionTypeId == conditionTypeId);
+            if (availabilityStatusId.HasValue) query = query.Where(p => p.AvailabilityStatusId == availabilityStatusId);
+            if (isActive.HasValue) query = query.Where(p => p.IsActive == isActive);
+            if (isPublished.HasValue) query = query.Where(p => p.IsPublished == isPublished);
+
+            var totalCount = await query.CountAsync(ct);
+            var items = (IReadOnlyList<ProductEntity>)await query
+                .OrderBy(p => p.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(ct);
+
+            await tx.CommitAsync(ct);
+            return (items, totalCount);
+        });
+    }
+
     public async Task<ProductEntity> CreateAsync(ProductEntity entity, CancellationToken ct = default)
     {
         var tenantId = TenantId;

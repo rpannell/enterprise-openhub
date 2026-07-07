@@ -18,6 +18,11 @@ builder.AddVaultSecrets("platform", "product-manager-function");
 
 builder.AddRedisDistributedCache("Redis");
 
+// Bootstrap client only — authenticates via the superuser connection string Aspire
+// injects. Consumed internally by ProductIndexAccessor to create the index and mint
+// a scoped writer API key once; nothing else should depend on this client directly.
+builder.AddElasticsearchClient("Elasticsearch");
+
 builder.Services.AddKeyCloakM2MTokenAccessor(builder.Configuration);
 
 builder.Services.AddAccessors(builder.Configuration);

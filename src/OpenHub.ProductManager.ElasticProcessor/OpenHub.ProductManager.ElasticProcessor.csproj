@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Elastic.Clients.Elasticsearch" Version="13.3.0" />
     <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
     <PackageReference Include="Rebus" Version="8.9.2" />
     <PackageReference Include="Rebus.RabbitMq" Version="10.1.1" />
@@ -22,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OpenHub.Platform.ServiceDefaults\OpenHub.Platform.ServiceDefaults.csproj" />
     <ProjectReference Include="..\OpenHub.Accessor.KeyCloak\OpenHub.Accessor.KeyCloak.csproj" />
+    <ProjectReference Include="..\OpenHub.Accessor.ElasticIndex\OpenHub.Accessor.ElasticIndex.csproj" />
     <ProjectReference Include="..\OpenHub.ProductManager.Contracts\OpenHub.ProductManager.Contracts.csproj" />
   </ItemGroup>
 

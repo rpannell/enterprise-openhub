@@ -35,6 +35,12 @@ var redis =
     builder.AddRedis("Redis")
            .WithDataVolume();
 
+var elasticsearchPassword = builder.AddParameter("elasticsearch-password", value: "Dev_P@ssw0rd1!", secret: true);
+
+var elasticsearch =
+    builder.AddElasticsearch("Elasticsearch", password: elasticsearchPassword)
+           .WithDataVolume();
+
 var minio =
     builder.AddContainer("minio", "quay.io/minio/minio")
            .WithEndpoint(9000, 9000)
@@ -148,6 +154,7 @@ var productManagerElasticProcessor = builder.AddProject<Projects.OpenHub_Product
     .WithReference(productManagerApi)
     .WithReference(rabbitmq)
     .WithReference(redis)
+    .WithReference(elasticsearch)
     .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
     .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
     .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
@@ -155,6 +162,7 @@ var productManagerElasticProcessor = builder.AddProject<Projects.OpenHub_Product
     .WaitFor(rabbitmq)
     .WaitFor(keycloak)
     .WaitFor(productManagerApi)
+    .WaitFor(elasticsearch)
     .WaitForCompletion(consulSeed)
     .WaitForCompletion(vaultSeed);
 
