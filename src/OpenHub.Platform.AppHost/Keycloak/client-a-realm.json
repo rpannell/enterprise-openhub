@@ -7,9 +7,20 @@
   "adminEventsEnabled": true,
   "adminEventsDetailsEnabled": true,
   "eventsListeners": ["jboss-logging", "rabbitmq-event-listener"],
+  "organizationsEnabled": true,
+  "organizations": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Client A",
+      "alias": "client-a",
+      "enabled": true,
+      "domains": [{ "name": "client-a.com", "verified": false }]
+    }
+  ],
   "roles": {
     "realm": [
       { "name": "user" },
+      { "name": "tenant-admin" },
       { "name": "product-manager" },
       { "name": "product-viewer" }
     ]
@@ -24,7 +35,7 @@
       "credentials": [
         { "type": "password", "value": "P@ssw0rd1", "temporary": false }
       ],
-      "realmRoles": ["user", "product-manager"]
+      "realmRoles": ["user", "product-manager", "tenant-admin"]
     }
   ],
   "clients": [

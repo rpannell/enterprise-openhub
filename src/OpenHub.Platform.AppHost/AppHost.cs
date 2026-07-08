@@ -137,7 +137,11 @@ var flyway = builder.AddContainer("flyway-catalog", "flyway/flyway", "latest")
 var frontend = builder.AddViteApp("shell", "../OpenHub.UI")
     .WithReference(keycloak)
     .WithEnvironment("VITE_KEYCLOAK_URL", keycloak.GetEndpoint("http"))
-    .WithEnvironment("VITE_KEYCLOAK_REALM", "client-a")
+    // Fallback realm when the hostname has no recognizable subdomain (e.g. plain
+    // localhost:5173 dev) — keycloak.ts otherwise derives the realm from the
+    // hostname's first label (client-a.localhost -> "client-a", admin.localhost ->
+    // "platform-admin"), so a real deployment needs no per-realm env var at all.
+    .WithEnvironment("VITE_KEYCLOAK_DEFAULT_REALM", "client-a")
     .WithEnvironment("VITE_KEYCLOAK_CLIENT_ID", "micro-ui-shell")
     .WithExternalHttpEndpoints();
 
@@ -159,6 +163,22 @@ var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>(
     .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
     .WithEnvironment("Vault__Token", vaultToken)
     .WaitForCompletion(flyway)
+    .WaitFor(keycloak)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
+
+// Stateless facade over Keycloak's Admin REST API — creates organizations and users.
+// No database/cache/messaging reference: Keycloak is the only infrastructure dependency.
+var administrationApi = builder.AddProject<Projects.OpenHub_Administration_Api>("administration-api")
+    .WithHttpEndpoint(port: 5300)
+    .WithHttpHealthCheck("/health")
+    .WithReference(keycloak)
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
+    .WithEnvironment("KeyCloak__AdminUsername", "admin")
+    .WithEnvironment("KeyCloak__AdminPassword", keycloakAdminPassword)
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
     .WaitFor(keycloak)
     .WaitForCompletion(consulSeed)
     .WaitForCompletion(vaultSeed);

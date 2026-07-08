@@ -1,0 +1,37 @@
+{
+  "id": "99999999-9999-9999-9999-999999999999",
+  "realm": "platform-admin",
+  "enabled": true,
+  "loginTheme": "openhub",
+  "eventsEnabled": true,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "roles": {
+    "realm": [
+      { "name": "platform-admin" }
+    ]
+  },
+  "users": [
+    {
+      "username": "ops-admin",
+      "enabled": true,
+      "email": "ops-admin@openhub.internal",
+      "firstName": "OpenHub",
+      "lastName": "Ops",
+      "credentials": [
+        { "type": "password", "value": "P@ssw0rd1", "temporary": false }
+      ],
+      "realmRoles": ["platform-admin"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "micro-ui-shell",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"]
+    }
+  ]
+}
