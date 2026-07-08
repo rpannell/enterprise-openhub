@@ -1,6 +1,36 @@
 # OpenHub Platform Conventions
 
-Cross-cutting standards for every API in the OpenHub platform. Apply these after scaffolding with `/idesign`.
+Cross-cutting standards for every API in the OpenHub platform, plus the one frontend-architecture
+decision below. Apply the API conventions after scaffolding with `/idesign`.
+
+## Frontend modules: local folder vs. Module Federation remote
+
+Every business module (Product Management, CRM, Help Desk, Ordering, Administration) defaults to
+a **local folder** in `OpenHub.UI/src/modules/<name>` — one Vite build, lazy-loaded, gated by role
+in `src/config/modules.ts`. Only split a module into its own Module Federation remote when it
+actually needs independent deploys (a different team, a different release schedule) — that's real
+infra cost (shared dependency versions, a federation host config, more CI/CD surfaces, more
+runtime failure modes), not something to default into.
+
+**Administration is the one federated remote today** (`src/Administration/OpenHub.Administration.UI`,
+built with Rspack, not Vite) — a genuine worked example of the pattern, including every real
+failure hit building it. Before federating the next module (CRM, Help Desk, and Ordering are the
+current local-folder placeholders in `modules.ts` most likely to need this next), read:
+
+- `OpenHub.UI/README.md`'s "Architecture" section — the decision framing (why not federate
+  everything by default)
+- `OpenHub.UI/docs/module-federation.md` — the full walkthrough: host/remote config shape, the
+  `HostAuthContext` contract (how auth crosses the federation boundary as a plain prop, not a
+  shared React context), every CORS/container-format/router-sharing/dev-server failure mode
+  already hit and fixed, and "What's simplified here" — what a real multi-remote platform needs
+  that this one-remote example deliberately doesn't have yet (a published contracts package, a
+  shared design-system remote, independent CI/CD, contract-compatibility testing)
+
+**Folder placement**: a new remote gets its own area folder under `src/`, matching
+`src/Administration/OpenHub.Administration.UI` — e.g. a federated CRM module would be
+`src/CRM/OpenHub.CRM.UI`, sibling to `src/CRM/OpenHub.CRM.Api` if that module's backend also gets
+split out of `OpenHub.ProductManager.Api`/its own API at the same time. See the `src/` area-folder
+reorg (`Accessor/`, `Administration/`, `Platform/`, `ProductManager/`, `Shell/`) for the pattern.
 
 ## OpenAPI Documentation
 
