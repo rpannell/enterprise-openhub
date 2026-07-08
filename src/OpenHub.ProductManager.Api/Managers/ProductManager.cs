@@ -61,10 +61,11 @@ public class ProductManager(
         return (hydrated, totalCount);
     }
 
-    public async Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    public async Task<(ProductDto? Product, bool IsDeleted)> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await productAccessor.GetByIdAsync(id, ct);
-        if (entity is null) return null;
+        var entity = await productAccessor.GetByIdIncludingDeletedAsync(id, ct);
+        if (entity is null) return (null, false);
+        if (entity.DeletedAt is not null) return (null, true);
 
         var dto = mapper.ToDto(entity);
 
@@ -83,7 +84,7 @@ public class ProductManager(
 
         dto.Prices = pricingEngine.HydratePrices(priceDtos, priceTypes, currencies).ToList();
 
-        return dto;
+        return (dto, false);
     }
 
     public async Task<ProductDto> CreateAsync(CreateProductRequest request, Guid createUserId, CancellationToken ct = default)

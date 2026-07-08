@@ -190,19 +190,20 @@ public class ProductManagerTests
     [Fact]
     public async Task GetByIdAsync_ProductNotFound_ReturnsNull()
     {
-        _productAccessor.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((ProductEntity?)null);
+        _productAccessor.GetByIdIncludingDeletedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((ProductEntity?)null);
         var manager = CreateManager();
 
         var result = await manager.GetByIdAsync(Guid.NewGuid());
 
-        result.ShouldBeNull();
+        result.Product.ShouldBeNull();
+        result.IsDeleted.ShouldBeFalse();
     }
 
     [Fact]
     public async Task GetByIdAsync_ProductFound_CallsEngineHydrate_AndHydratesPrices()
     {
         var entity = MakeEntity();
-        _productAccessor.GetByIdAsync(entity.Id, Arg.Any<CancellationToken>()).Returns(entity);
+        _productAccessor.GetByIdIncludingDeletedAsync(entity.Id, Arg.Any<CancellationToken>()).Returns(entity);
         _priceAccessor.GetActiveByProductIdAsync(entity.Id, Arg.Any<CancellationToken>())
             .Returns(new List<ProductPriceEntity>());
         _productEngine.Hydrate(
@@ -215,10 +216,28 @@ public class ProductManagerTests
         var manager = CreateManager();
         var result = await manager.GetByIdAsync(entity.Id);
 
-        result.ShouldNotBeNull();
+        result.Product.ShouldNotBeNull();
+        result.IsDeleted.ShouldBeFalse();
         _productEngine.Received(1).Hydrate(
             Arg.Any<ProductDto>(), Arg.Any<IReadOnlyDictionary<Guid, string>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>(),
             Arg.Any<IReadOnlyDictionary<Guid, string>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>());
         _pricingEngine.Received(1).HydratePrices(Arg.Any<IEnumerable<ProductPriceDto>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>());
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ProductSoftDeleted_ReturnsIsDeletedTrue_AndNullProduct()
+    {
+        var entity = MakeEntity();
+        entity.DeletedAt = DateTimeOffset.UtcNow;
+        _productAccessor.GetByIdIncludingDeletedAsync(entity.Id, Arg.Any<CancellationToken>()).Returns(entity);
+        var manager = CreateManager();
+
+        var result = await manager.GetByIdAsync(entity.Id);
+
+        result.Product.ShouldBeNull();
+        result.IsDeleted.ShouldBeTrue();
+        _productEngine.DidNotReceive().Hydrate(
+            Arg.Any<ProductDto>(), Arg.Any<IReadOnlyDictionary<Guid, string>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>(),
+            Arg.Any<IReadOnlyDictionary<Guid, string>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>(), Arg.Any<IReadOnlyDictionary<Guid, string>>());
     }
 }
