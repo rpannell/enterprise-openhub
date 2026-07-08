@@ -1,47 +1,61 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.0.0
 MinimumVisualStudioVersion = 17.8.0.0
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Platform.AppHost", "OpenHub.Platform.AppHost\OpenHub.Platform.AppHost.csproj", "{B39CF090-86A1-4634-A151-C7205C608EBE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Platform.AppHost", "Platform\OpenHub.Platform.AppHost\OpenHub.Platform.AppHost.csproj", "{B39CF090-86A1-4634-A151-C7205C608EBE}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Platform.ServiceDefaults", "OpenHub.Platform.ServiceDefaults\OpenHub.Platform.ServiceDefaults.csproj", "{93EB1D30-1C71-455A-8C66-B276E2395F41}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Platform.ServiceDefaults", "Platform\OpenHub.Platform.ServiceDefaults\OpenHub.Platform.ServiceDefaults.csproj", "{93EB1D30-1C71-455A-8C66-B276E2395F41}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.ProductManager.Api", "OpenHub.ProductManager.Api\OpenHub.ProductManager.Api.csproj", "{C918C5C3-EE1B-4ADF-B076-4344512662C1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.ProductManager.Api", "ProductManager\OpenHub.ProductManager.Api\OpenHub.ProductManager.Api.csproj", "{C918C5C3-EE1B-4ADF-B076-4344512662C1}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Accessor.KeyCloak", "OpenHub.Accessor.KeyCloak\OpenHub.Accessor.KeyCloak.csproj", "{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenHub.Accessor.KeyCloak", "Accessor\OpenHub.Accessor.KeyCloak\OpenHub.Accessor.KeyCloak.csproj", "{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.RabbitMq", "OpenHub.Accessor.RabbitMq\OpenHub.Accessor.RabbitMq.csproj", "{EF30FCEE-CA06-4E47-A6E8-DE93E0A78019}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.RabbitMq", "Accessor\OpenHub.Accessor.RabbitMq\OpenHub.Accessor.RabbitMq.csproj", "{EF30FCEE-CA06-4E47-A6E8-DE93E0A78019}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.KeyCloak.Tests", "..\tests\OpenHub.Accessor.KeyCloak.Tests\OpenHub.Accessor.KeyCloak.Tests.csproj", "{53663FDE-9811-4666-A2FF-8F98D16862D0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.KeyCloak.Tests", "..\tests\Accessor\OpenHub.Accessor.KeyCloak.Tests\OpenHub.Accessor.KeyCloak.Tests.csproj", "{53663FDE-9811-4666-A2FF-8F98D16862D0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.RabbitMq.Tests", "..\tests\OpenHub.Accessor.RabbitMq.Tests\OpenHub.Accessor.RabbitMq.Tests.csproj", "{338CA011-6049-489F-B0DB-38F02A45AD40}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.RabbitMq.Tests", "..\tests\Accessor\OpenHub.Accessor.RabbitMq.Tests\OpenHub.Accessor.RabbitMq.Tests.csproj", "{338CA011-6049-489F-B0DB-38F02A45AD40}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.Contracts", "OpenHub.ProductManager.Contracts\OpenHub.ProductManager.Contracts.csproj", "{AE61D7F5-D3D2-4FF4-A3EE-CD737F487AA8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.Contracts", "ProductManager\OpenHub.ProductManager.Contracts\OpenHub.ProductManager.Contracts.csproj", "{AE61D7F5-D3D2-4FF4-A3EE-CD737F487AA8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.ElasticProcessor", "OpenHub.ProductManager.ElasticProcessor\OpenHub.ProductManager.ElasticProcessor.csproj", "{ED9C5F48-C591-4F04-90BF-109672EF221C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.ElasticProcessor", "ProductManager\OpenHub.ProductManager.ElasticProcessor\OpenHub.ProductManager.ElasticProcessor.csproj", "{ED9C5F48-C591-4F04-90BF-109672EF221C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.ElasticProcessor.Tests", "..\tests\OpenHub.ProductManager.ElasticProcessor.Tests\OpenHub.ProductManager.ElasticProcessor.Tests.csproj", "{643E57F6-9C56-474E-91C6-7B4A3AA1B0DE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.ElasticProcessor.Tests", "..\tests\ProductManager\OpenHub.ProductManager.ElasticProcessor.Tests\OpenHub.ProductManager.ElasticProcessor.Tests.csproj", "{643E57F6-9C56-474E-91C6-7B4A3AA1B0DE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.SeedTool", "OpenHub.ProductManager.SeedTool\OpenHub.ProductManager.SeedTool.csproj", "{6C4D9F0F-9AFB-4A79-B1C7-D68B84C4F432}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.SeedTool", "ProductManager\OpenHub.ProductManager.SeedTool\OpenHub.ProductManager.SeedTool.csproj", "{6C4D9F0F-9AFB-4A79-B1C7-D68B84C4F432}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.ElasticIndex", "OpenHub.Accessor.ElasticIndex\OpenHub.Accessor.ElasticIndex.csproj", "{CA9932A3-EDC6-4F9C-BF38-4048C7AC3477}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Accessor.ElasticIndex", "Accessor\OpenHub.Accessor.ElasticIndex\OpenHub.Accessor.ElasticIndex.csproj", "{CA9932A3-EDC6-4F9C-BF38-4048C7AC3477}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.ReindexJob", "OpenHub.ProductManager.ReindexJob\OpenHub.ProductManager.ReindexJob.csproj", "{026FA7C7-028A-4E3F-80F1-2753145D8BC7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.ReindexJob", "ProductManager\OpenHub.ProductManager.ReindexJob\OpenHub.ProductManager.ReindexJob.csproj", "{026FA7C7-028A-4E3F-80F1-2753145D8BC7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Platform.IdentityEvents.Contracts", "OpenHub.Platform.IdentityEvents.Contracts\OpenHub.Platform.IdentityEvents.Contracts.csproj", "{7B1A2C3D-4E5F-4061-8A9B-0C1D2E3F4A5B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Platform.IdentityEvents.Contracts", "Platform\OpenHub.Platform.IdentityEvents.Contracts\OpenHub.Platform.IdentityEvents.Contracts.csproj", "{7B1A2C3D-4E5F-4061-8A9B-0C1D2E3F4A5B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.IdentityEventProcessor", "OpenHub.ProductManager.IdentityEventProcessor\OpenHub.ProductManager.IdentityEventProcessor.csproj", "{8C2B3D4E-5F60-4172-9BAC-1D2E3F4A5B6C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.IdentityEventProcessor", "ProductManager\OpenHub.ProductManager.IdentityEventProcessor\OpenHub.ProductManager.IdentityEventProcessor.csproj", "{8C2B3D4E-5F60-4172-9BAC-1D2E3F4A5B6C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.IdentityEventProcessor.Tests", "..\tests\OpenHub.ProductManager.IdentityEventProcessor.Tests\OpenHub.ProductManager.IdentityEventProcessor.Tests.csproj", "{9D3C4E5F-6071-4283-ABCD-2E3F4A5B6C7D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.IdentityEventProcessor.Tests", "..\tests\ProductManager\OpenHub.ProductManager.IdentityEventProcessor.Tests\OpenHub.ProductManager.IdentityEventProcessor.Tests.csproj", "{9D3C4E5F-6071-4283-ABCD-2E3F4A5B6C7D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.Api.Tests", "..\tests\OpenHub.ProductManager.Api.Tests\OpenHub.ProductManager.Api.Tests.csproj", "{1A2B3C4D-5E6F-4708-8192-3A4B5C6D7E8F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.ProductManager.Api.Tests", "..\tests\ProductManager\OpenHub.ProductManager.Api.Tests\OpenHub.ProductManager.Api.Tests.csproj", "{1A2B3C4D-5E6F-4708-8192-3A4B5C6D7E8F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Administration.Api", "OpenHub.Administration.Api\OpenHub.Administration.Api.csproj", "{63AA5B40-9B6F-4DA5-A0E1-2F66FC11D4D9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Administration.Api", "Administration\OpenHub.Administration.Api\OpenHub.Administration.Api.csproj", "{63AA5B40-9B6F-4DA5-A0E1-2F66FC11D4D9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Administration.Api.Tests", "..\tests\OpenHub.Administration.Api.Tests\OpenHub.Administration.Api.Tests.csproj", "{E9BE879E-4757-47A1-9C14-78EE8A53725A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenHub.Administration.Api.Tests", "..\tests\Administration\OpenHub.Administration.Api.Tests\OpenHub.Administration.Api.Tests.csproj", "{E9BE879E-4757-47A1-9C14-78EE8A53725A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Accessor", "Accessor", "{A1000000-0000-0000-0000-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Administration", "Administration", "{A1000000-0000-0000-0000-000000000002}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Platform", "Platform", "{A1000000-0000-0000-0000-000000000003}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ProductManager", "ProductManager", "{A1000000-0000-0000-0000-000000000004}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Accessor", "Accessor", "{A2000000-0000-0000-0000-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Administration", "Administration", "{A2000000-0000-0000-0000-000000000002}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ProductManager", "ProductManager", "{A2000000-0000-0000-0000-000000000003}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -286,11 +300,28 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{53663FDE-9811-4666-A2FF-8F98D16862D0} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{338CA011-6049-489F-B0DB-38F02A45AD40} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{643E57F6-9C56-474E-91C6-7B4A3AA1B0DE} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{9D3C4E5F-6071-4283-ABCD-2E3F4A5B6C7D} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
-		{1A2B3C4D-5E6F-4708-8192-3A4B5C6D7E8F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{B39CF090-86A1-4634-A151-C7205C608EBE} = {A1000000-0000-0000-0000-000000000003}
+		{93EB1D30-1C71-455A-8C66-B276E2395F41} = {A1000000-0000-0000-0000-000000000003}
+		{C918C5C3-EE1B-4ADF-B076-4344512662C1} = {A1000000-0000-0000-0000-000000000004}
+		{D2A4C1E3-8F5B-4A2D-9C1E-7B3F0A5D2E8C} = {A1000000-0000-0000-0000-000000000001}
+		{EF30FCEE-CA06-4E47-A6E8-DE93E0A78019} = {A1000000-0000-0000-0000-000000000001}
+		{AE61D7F5-D3D2-4FF4-A3EE-CD737F487AA8} = {A1000000-0000-0000-0000-000000000004}
+		{ED9C5F48-C591-4F04-90BF-109672EF221C} = {A1000000-0000-0000-0000-000000000004}
+		{6C4D9F0F-9AFB-4A79-B1C7-D68B84C4F432} = {A1000000-0000-0000-0000-000000000004}
+		{CA9932A3-EDC6-4F9C-BF38-4048C7AC3477} = {A1000000-0000-0000-0000-000000000001}
+		{026FA7C7-028A-4E3F-80F1-2753145D8BC7} = {A1000000-0000-0000-0000-000000000004}
+		{7B1A2C3D-4E5F-4061-8A9B-0C1D2E3F4A5B} = {A1000000-0000-0000-0000-000000000003}
+		{8C2B3D4E-5F60-4172-9BAC-1D2E3F4A5B6C} = {A1000000-0000-0000-0000-000000000004}
+		{63AA5B40-9B6F-4DA5-A0E1-2F66FC11D4D9} = {A1000000-0000-0000-0000-000000000002}
+		{A2000000-0000-0000-0000-000000000001} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{A2000000-0000-0000-0000-000000000002} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{A2000000-0000-0000-0000-000000000003} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{53663FDE-9811-4666-A2FF-8F98D16862D0} = {A2000000-0000-0000-0000-000000000001}
+		{338CA011-6049-489F-B0DB-38F02A45AD40} = {A2000000-0000-0000-0000-000000000001}
+		{643E57F6-9C56-474E-91C6-7B4A3AA1B0DE} = {A2000000-0000-0000-0000-000000000003}
+		{9D3C4E5F-6071-4283-ABCD-2E3F4A5B6C7D} = {A2000000-0000-0000-0000-000000000003}
+		{1A2B3C4D-5E6F-4708-8192-3A4B5C6D7E8F} = {A2000000-0000-0000-0000-000000000003}
+		{E9BE879E-4757-47A1-9C14-78EE8A53725A} = {A2000000-0000-0000-0000-000000000002}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CFD0BCCD-4357-4507-AFFA-C8A21BA28228}

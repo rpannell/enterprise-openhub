@@ -30,17 +30,17 @@ Every backend project lives under `src/` and follows [iDesign layering](https://
 
 | Project | Purpose |
 |---|---|
-| [`OpenHub.UI`](src/OpenHub.UI) | React shell: Keycloak login, role-gated dashboard tiles, one lazy-loaded module per business area (Product Management, Help Desk, Ordering, CRM). |
-| [`OpenHub.Platform.AppHost`](src/OpenHub.Platform.AppHost) | .NET Aspire orchestrator for local dev — wires up every dependency and service below with service discovery, health checks, and seeded dev config/secrets. |
-| [`OpenHub.Platform.ServiceDefaults`](src/OpenHub.Platform.ServiceDefaults) | Shared cross-cutting concerns every service opts into: OpenTelemetry, health checks, Consul/Vault config loading, multi-realm Keycloak JWT auth. |
-| [`OpenHub.Accessor.KeyCloak`](src/OpenHub.Accessor.KeyCloak) | Multi-realm Keycloak client: realm/admin API access and M2M (client-credentials) token issuance, cached per realm. |
-| [`OpenHub.Accessor.RabbitMq`](src/OpenHub.Accessor.RabbitMq) | Durable fanout-exchange publisher, pooled channels, built for high-concurrency publish from a singleton. |
-| [`OpenHub.Accessor.ElasticIndex`](src/OpenHub.Accessor.ElasticIndex) | Generic tenant-isolated Elasticsearch indexing: one shared index per document type, per-tenant filtered aliases + scoped API keys, plus versioned-index/bulk/alias-repoint support for full reindexes. |
-| [`OpenHub.ProductManager.Contracts`](src/OpenHub.ProductManager.Contracts) | Shared wire contracts (events, Elasticsearch document shapes) between the Product Manager API and its downstream consumers — no drift between publisher and consumer. |
-| [`OpenHub.ProductManager.Api`](src/OpenHub.ProductManager.Api) | The product catalog API: multi-tenant CRUD, lookups, paged/full-text search, admin (cross-tenant) endpoints. Publishes `ProductChangedEvent`s on every write. |
-| [`OpenHub.ProductManager.ElasticProcessor`](src/OpenHub.ProductManager.ElasticProcessor) | Trickle-feed consumer: reacts to `ProductChangedEvent`s in near-real-time, keeping the Elasticsearch index in sync one product at a time. |
-| [`OpenHub.ProductManager.ReindexJob`](src/OpenHub.ProductManager.ReindexJob) | One-shot scheduled job (Kubernetes CronJob in prod): rebuilds the entire Elasticsearch index from scratch, tenant by tenant, with independent per-tenant cutover. |
-| [`OpenHub.ProductManager.SeedTool`](src/OpenHub.ProductManager.SeedTool) | Console tool for bulk-loading realistic catalog data directly via Postgres `COPY`, for load-testing the sync/search path without going through the API. |
+| [`OpenHub.UI`](src/Shell/OpenHub.UI) | React shell: Keycloak login, role-gated dashboard tiles, one lazy-loaded module per business area (Product Management, Help Desk, Ordering, CRM). |
+| [`OpenHub.Platform.AppHost`](src/Platform/OpenHub.Platform.AppHost) | .NET Aspire orchestrator for local dev — wires up every dependency and service below with service discovery, health checks, and seeded dev config/secrets. |
+| [`OpenHub.Platform.ServiceDefaults`](src/Platform/OpenHub.Platform.ServiceDefaults) | Shared cross-cutting concerns every service opts into: OpenTelemetry, health checks, Consul/Vault config loading, multi-realm Keycloak JWT auth. |
+| [`OpenHub.Accessor.KeyCloak`](src/Accessor/OpenHub.Accessor.KeyCloak) | Multi-realm Keycloak client: realm/admin API access and M2M (client-credentials) token issuance, cached per realm. |
+| [`OpenHub.Accessor.RabbitMq`](src/Accessor/OpenHub.Accessor.RabbitMq) | Durable fanout-exchange publisher, pooled channels, built for high-concurrency publish from a singleton. |
+| [`OpenHub.Accessor.ElasticIndex`](src/Accessor/OpenHub.Accessor.ElasticIndex) | Generic tenant-isolated Elasticsearch indexing: one shared index per document type, per-tenant filtered aliases + scoped API keys, plus versioned-index/bulk/alias-repoint support for full reindexes. |
+| [`OpenHub.ProductManager.Contracts`](src/ProductManager/OpenHub.ProductManager.Contracts) | Shared wire contracts (events, Elasticsearch document shapes) between the Product Manager API and its downstream consumers — no drift between publisher and consumer. |
+| [`OpenHub.ProductManager.Api`](src/ProductManager/OpenHub.ProductManager.Api) | The product catalog API: multi-tenant CRUD, lookups, paged/full-text search, admin (cross-tenant) endpoints. Publishes `ProductChangedEvent`s on every write. |
+| [`OpenHub.ProductManager.ElasticProcessor`](src/ProductManager/OpenHub.ProductManager.ElasticProcessor) | Trickle-feed consumer: reacts to `ProductChangedEvent`s in near-real-time, keeping the Elasticsearch index in sync one product at a time. |
+| [`OpenHub.ProductManager.ReindexJob`](src/ProductManager/OpenHub.ProductManager.ReindexJob) | One-shot scheduled job (Kubernetes CronJob in prod): rebuilds the entire Elasticsearch index from scratch, tenant by tenant, with independent per-tenant cutover. |
+| [`OpenHub.ProductManager.SeedTool`](src/ProductManager/OpenHub.ProductManager.SeedTool) | Console tool for bulk-loading realistic catalog data directly via Postgres `COPY`, for load-testing the sync/search path without going through the API. |
 | `src/Database/ProductManager` | Flyway SQL migrations for the catalog schema, Row Level Security policies, and reference data. |
 | `infrastructure/k8s` | Raw Kubernetes manifests for every stateful/infra dependency (Postgres, RabbitMQ, Redis, Consul, Vault, Kong, and the Product Manager reindex CronJob) — the non-Aspire deployment path. |
 
@@ -59,7 +59,7 @@ This is the recommended day-to-day workflow — one command starts Postgres, Red
 **Run it:**
 ```powershell
 cd src
-dotnet run --project OpenHub.Platform.AppHost
+dotnet run --project Platform/OpenHub.Platform.AppHost
 ```
 
 The Aspire dashboard (URL printed on startup) shows every resource, its logs, traces, and health. Notable pieces:

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OpenHub.ProductManager.ReindexJob</AssemblyName>
+    <RootNamespace>OpenHub.ProductManager.ReindexJob</RootNamespace>
+    <UserSecretsId>dotnet-OpenHub.ProductManager.ReindexJob-2f6c0e7f-9a8b-4d0f-9e5e-2f2e5b6ab7c3</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Elastic.Clients.Elasticsearch" Version="13.3.0" />
+    <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="9.3.1" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="9.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Platform\OpenHub.Platform.ServiceDefaults\OpenHub.Platform.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\Accessor\OpenHub.Accessor.KeyCloak\OpenHub.Accessor.KeyCloak.csproj" />
+    <ProjectReference Include="..\..\Accessor\OpenHub.Accessor.ElasticIndex\OpenHub.Accessor.ElasticIndex.csproj" />
+    <ProjectReference Include="..\OpenHub.ProductManager.Contracts\OpenHub.ProductManager.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
