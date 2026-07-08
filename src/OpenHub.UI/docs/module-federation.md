@@ -226,17 +226,27 @@ multi-team platform. Things a real multi-remote setup would need that this doesn
 ## What independent deployment would actually take
 
 Everything above gets this remote *federating correctly*; it doesn't yet get it *deployed
-independently*, which was the original ask. Two things are still missing:
+independently*, which was the original ask. Two things were missing; one is now partially
+addressed, one still isn't:
 
-1. **A real hosting target for the remote's static output.** Right now `entry:
-   "http://localhost:5175/remoteEntry.js"` in `vite.config.ts` is a hardcoded dev URL. A real
-   deployment needs this to be environment-specific (a CDN URL in production, a staging URL in
-   staging), which usually means resolving it from a runtime config value rather than a bundled
-   constant, so the shell doesn't need a rebuild every time the remote's deployed URL changes.
+1. **A real hosting target for the remote's static output — now build-time-configurable, not yet
+   runtime-configurable.** `vite.config.ts`'s `entry` and `rspack.config.ts`'s `output.publicPath`
+   both used to be hardcoded dev URLs; both now read from env vars instead (`ADMIN_REMOTE_URL` and
+   `PUBLIC_PATH` — see each project's README and `Dockerfile`), set via `docker build --build-arg`.
+   That's real progress — a CDN URL, a staging URL, and the dev default are now three different
+   builds of the same source, not three edits to it. But it's still resolved into a **bundled
+   constant at build time**, the same way Vite inlines `VITE_` vars: the shell still needs a
+   rebuild every time the remote's deployed URL changes, it just no longer needs a source edit to
+   go with it. A true runtime-configurable public path (reading `window.__ADMIN_REMOTE_URL__` or
+   similar, set by the serving infra rather than baked in) is possible in both Vite's federation
+   plugin and Rspack/webpack's `__webpack_public_path__`, just not implemented here — see "What's
+   simplified here" above.
 2. **A separate build/deploy pipeline** for `OpenHub.Administration.UI` — its own CI job, its own
    artifact, its own release cadence, independent of `OpenHub.UI`'s. This repo builds both
    together today; nothing stops that, but it also means "independent deploys" isn't actually
-   being exercised yet, just made possible.
+   being exercised yet, just made possible. Each project's own `Dockerfile` is a step toward this
+   (each is a genuinely independent build you can run and publish separately), but nothing here
+   defines two separate CI jobs or release cadences yet.
 
 ## Running it locally
 

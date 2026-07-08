@@ -85,6 +85,77 @@ flow enabled, and redirect URIs covering `http://localhost:5173/*` (and
 `http://*.localhost:5173/*` if you're testing multi-tenant login locally —
 see "Multi-tenant login" above).
 
+## Environment variables
+
+All of these are read at **build time**, not runtime — three via Vite's `VITE_`-prefixed
+`import.meta.env` convention, one (`ADMIN_REMOTE_URL`) directly off `process.env` since
+`vite.config.ts` itself runs in Node, not the browser. Either way, Vite/the federation plugin
+inline the resolved values into the compiled JS when you run `npm run build` (or `vite build`);
+setting them as container/server environment variables on the already-built static files does
+nothing. This is the most common way this trips people up, since it behaves differently from a
+typical backend service's env vars. See "Docker" below for how the build args feed these in.
+
+| Variable | Required | Example | Notes |
+|---|---|---|---|
+| `VITE_KEYCLOAK_URL` | Yes | `https://keycloak.example.com` | Base URL of your Keycloak server. No trailing slash. |
+| `VITE_KEYCLOAK_CLIENT_ID` | Yes | `micro-ui-shell` | Must exist as a **public client** (standard flow enabled) in every tenant realm and in `platform-admin` — see "Getting started" above. Same client ID across all realms; only the realm changes per tenant. |
+| `VITE_KEYCLOAK_DEFAULT_REALM` | Yes | `client-a` | Fallback realm used only when the hostname has no recognizable subdomain — see "Multi-tenant login" above. In production, real tenant traffic never hits this fallback (each tenant's subdomain resolves its own realm), but it still needs a valid value or login on the bare domain (health checks, a root/apex hit before DNS/routing is fully set up) will fail. |
+| `ADMIN_REMOTE_URL` | Yes | `https://cdn.example.com/admin-ui/remoteEntry.js` | Where `OpenHub.Administration.UI`'s build is actually hosted — must be the same base URL that build's own `PUBLIC_PATH` was set to (see that project's README), plus `remoteEntry.js`. Read in `vite.config.ts`'s `federation({ remotes: { adminRemote: { entry: ... } } })`. Falls back to the local dev URL if unset — don't rely on that fallback for anything but local dev. |
+
+Each Keycloak client's **Valid redirect URIs** need every production origin this bundle will
+actually be served from — the wildcard subdomain pattern from "Multi-tenant login"
+(`https://*.openhub.com/*`) plus the bare domain if you serve one, not just `localhost`.
+
+**One more thing a real deployment needs that isn't a build-time env var:** `/pm` and `/adm` are
+relative paths, not absolute URLs (see `src/services/*.ts`) — the SPA expects same-origin
+reverse-proxy routing in front of it (`/pm/*` → `OpenHub.ProductManager.Api`, `/adm/*` →
+`OpenHub.Administration.Api`), the same shape `vite.config.ts`'s dev-only `server.proxy` fakes
+locally. Unlike the vars above, this one *is* a container-runtime concern, not a build-time one —
+see "Docker" below, where it's `PRODUCT_MANAGER_API_URL`/`ADMINISTRATION_API_URL` substituted into
+nginx's config on container start.
+
+## Docker
+
+```bash
+docker build \
+  --build-arg VITE_KEYCLOAK_URL=https://keycloak.example.com \
+  --build-arg VITE_KEYCLOAK_CLIENT_ID=micro-ui-shell \
+  --build-arg VITE_KEYCLOAK_DEFAULT_REALM=client-a \
+  --build-arg ADMIN_REMOTE_URL=https://cdn.example.com/admin-ui/remoteEntry.js \
+  -t openhub-shell .
+
+docker run -p 80:80 \
+  -e PRODUCT_MANAGER_API_URL=http://product-manager-api:8080 \
+  -e ADMINISTRATION_API_URL=http://administration-api:8080 \
+  openhub-shell
+```
+
+Two-stage build (`Dockerfile`): `node:20-alpine` builds the static bundle, `nginx:1.27-alpine`
+serves it. Two different configuration mechanisms, matching the two different lifecycles above:
+
+- **`--build-arg`s** (`VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_CLIENT_ID`, `VITE_KEYCLOAK_DEFAULT_REALM`,
+  `ADMIN_REMOTE_URL`) — the build-time env vars from the table above. Baked into the image; a
+  different environment (staging vs. production, or a changed `ADMIN_REMOTE_URL`) needs a
+  rebuild, not just a different `docker run`.
+- **`-e` / container env vars** (`PRODUCT_MANAGER_API_URL`, `ADMINISTRATION_API_URL`, and
+  `DNS_RESOLVER`, all with dev-friendly defaults baked in — see `Dockerfile`) — read by nginx at
+  **container start**, via `nginx.conf.template` and the base image's built-in envsubst-on-launch
+  (anything under `/etc/nginx/templates/*.template`). Change these freely per environment without
+  rebuilding the image, same image everywhere.
+- `DNS_RESOLVER` defaults to `127.0.0.11` (Docker's embedded DNS — works out of the box under
+  Compose/Swarm). Override it for Kubernetes (your cluster's CoreDNS/kube-dns service IP) or any
+  other environment. This exists so nginx resolves `PRODUCT_MANAGER_API_URL`/
+  `ADMINISTRATION_API_URL`'s hostnames at *request* time instead of once at container startup —
+  without it, nginx refuses to start at all if the backing API isn't DNS-resolvable the instant
+  this container boots (a real crash-loop risk if this container starts before those services do).
+
+**No per-tenant container config, ever** — every tenant subdomain
+(`client-a.openhub.com`, `admin.openhub.com`, ...) is served the exact same image/container;
+realm selection happens entirely client-side, from the hostname (`src/keycloak.ts`, see
+"Multi-tenant login" above). What has to be right at the infra layer instead: DNS/ingress routing
+every tenant subdomain to this service, and a TLS cert covering all of them (wildcard, or one SAN
+per tenant) — nginx itself (`nginx.conf.template`) doesn't need to know tenants exist.
+
 ## Roles used in this starter
 
 | Role | Unlocks |

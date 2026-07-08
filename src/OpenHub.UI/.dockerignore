@@ -1,0 +1,10 @@
+node_modules
+dist
+.vite
+@mf-types
+.env
+.env.local
+.env.*.local
+*.log
+Dockerfile
+.dockerignore

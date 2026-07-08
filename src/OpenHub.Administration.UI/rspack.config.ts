@@ -136,6 +136,17 @@ export default defineConfig({
   output: {
     path: path.resolve(__dirname, "dist"),
     uniqueName: "adminRemote",
-    publicPath: "http://localhost:5175/",
+    // Every chunk this remote emits (remoteEntry.js, the exposed AdminApp chunk, its CSS)
+    // resolves against this at runtime, so it has to be wherever this build's output is
+    // actually hosted, not the dev URL, for anything other than local dev. Read from an env
+    // var, set as a `docker build --build-arg PUBLIC_PATH=...` (see Dockerfile), rather than
+    // hardcoded — but this is still a build-time value baked into the compiled JS, same as
+    // the shell's VITE_ vars: one image per environment/publicPath, not something a running
+    // container can be reconfigured to at deploy time without a rebuild. A true runtime-
+    // configurable public path is possible in webpack/rspack (setting `__webpack_public_path__`
+    // from a value read off `window` before the async boundary in src/index.tsx), just not
+    // implemented here — this project stays at the simplicity level of the rest of this
+    // teaching example (see docs/module-federation.md's "What's simplified here").
+    publicPath: process.env.PUBLIC_PATH ?? "http://localhost:5175/",
   },
 });
