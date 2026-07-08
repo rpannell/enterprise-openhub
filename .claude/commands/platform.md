@@ -32,6 +32,13 @@ current local-folder placeholders in `modules.ts` most likely to need this next)
 split out of `OpenHub.ProductManager.Api`/its own API at the same time. See the `src/` area-folder
 reorg (`Accessor/`, `Administration/`, `Platform/`, `ProductManager/`, `Shell/`) for the pattern.
 
+**Frontend unit testing: Vitest.** Not yet set up in any project as of this writing (no
+`vitest` dependency or test script in either `OpenHub.UI` or `OpenHub.Administration.UI`'s
+`package.json` yet) — noted here as the decided tool so whoever scaffolds the first test suite
+doesn't have to re-litigate the choice. Natural fit alongside the existing Vite tooling in the
+shell; works the same way for the Rspack-built Administration remote (Vitest doesn't require Vite
+itself, just shares its config/transform pipeline conventions).
+
 ## OpenAPI Documentation
 
 Every endpoint and every public model property must be documented.
