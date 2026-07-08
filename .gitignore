@@ -28,8 +28,8 @@ coverage/
 **/appsettings.*.local.json
 **/Properties/launchSettings.json
 # Exception: API projects need launchSettings committed so Aspire can discover their endpoints
-!src/OpenHub.ProductManager.Api/Properties/launchSettings.json
-!src/OpenHub.Administration.Api/Properties/launchSettings.json
+!src/ProductManager/OpenHub.ProductManager.Api/Properties/launchSettings.json
+!src/Administration/OpenHub.Administration.Api/Properties/launchSettings.json
 
 # Azure Functions local-only dev settings (may contain local secrets)
 local.settings.json
