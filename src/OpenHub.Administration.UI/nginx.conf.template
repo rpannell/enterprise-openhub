@@ -1,0 +1,20 @@
+# Regex-matched CORS allowlist — a fixed Access-Control-Allow-Origin string can't cover every
+# tenant subdomain the shell is served from, so this reflects the request's Origin back only
+# when it matches ALLOWED_ORIGIN_REGEX (substituted below on container start), same approach
+# as the dev server's headers function in rspack.config.ts.
+map $http_origin $cors_origin {
+    default "";
+    "~${ALLOWED_ORIGIN_REGEX}" $http_origin;
+}
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+
+    location / {
+        add_header 'Access-Control-Allow-Origin' $cors_origin always;
+        try_files $uri =404;
+    }
+}

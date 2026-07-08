@@ -1,0 +1,47 @@
+# Resolves proxy_pass upstream hostnames at *request* time instead of nginx's default of
+# once at startup. Without this, nginx refuses to start at all if PRODUCT_MANAGER_API_URL's
+# or ADMINISTRATION_API_URL's host isn't DNS-resolvable the instant this container boots
+# (crash-loops in Kubernetes/Compose if this container starts before the backing service
+# does, or during any brief DNS hiccup) — the $upstream_* variable indirection below is the
+# standard nginx trick to defer resolution instead. 127.0.0.11 is Docker's embedded DNS
+# (works out of the box under Compose/Swarm); override DNS_RESOLVER for Kubernetes (your
+# cluster's CoreDNS/kube-dns service IP) or any other environment.
+resolver ${DNS_RESOLVER} valid=10s;
+
+server {
+    listen 80;
+    # Wildcard: every tenant subdomain (client-a.openhub.com, admin.openhub.com, ...) serves
+    # this exact same bundle. Realm selection happens client-side, from the hostname
+    # (src/keycloak.ts) — nginx doesn't need to know tenants exist.
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA fallback — client-side routes (react-router) aren't real files on disk.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Same-origin reverse-proxy targets the app expects (src/services/productManagerApi.ts,
+    # src/services/administrationApi.ts hardcode relative "/pm" and "/adm" — not env-configurable
+    # in the app itself, by design; see README.md "Environment variables"). Targets are runtime
+    # env vars, substituted here on container start.
+    location /pm/ {
+        set $upstream_pm ${PRODUCT_MANAGER_API_URL};
+        proxy_pass $upstream_pm/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /adm/ {
+        set $upstream_adm ${ADMINISTRATION_API_URL};
+        proxy_pass $upstream_adm/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

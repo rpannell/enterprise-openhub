@@ -15,7 +15,13 @@ export default defineConfig({
         adminRemote: {
           type: "module",
           name: "adminRemote",
-          entry: "http://localhost:5175/remoteEntry.js",
+          // Resolved at build time (this file runs in Node, so plain process.env — no VITE_
+          // prefix needed; the federation plugin bakes the resolved string into the compiled
+          // host runtime that fetches it in the browser). Must match wherever
+          // OpenHub.Administration.UI's build actually gets hosted — the same value its own
+          // `PUBLIC_PATH` build arg was set to (see that project's Dockerfile/README) plus
+          // "remoteEntry.js". Passed as `docker build --build-arg ADMIN_REMOTE_URL=...` here.
+          entry: process.env.ADMIN_REMOTE_URL ?? "http://localhost:5175/remoteEntry.js",
           entryGlobalName: "adminRemote",
           shareScope: "default",
         },
