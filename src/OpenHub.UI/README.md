@@ -6,22 +6,33 @@ Warehouse, Ordering, CRM). You only see a tile if you have a role for it.
 
 ## Architecture (read this first)
 
-This is **one app, modularly split** — not separate deployable
-micro-frontends. Each business area lives in `src/modules/<name>` as its own
+Four of five modules here are **one app, modularly split** — not separate
+deployable micro-frontends. Each lives in `src/modules/<name>` as its own
 folder with its own routes inside it. They're lazy-loaded, so a user without
 the `crm-user` role never even downloads the CRM module's code.
 
-Why not true micro-frontends (Module Federation)? That buys independent
-deploys per team, at the cost of real infra work (shared dependency
-versions, a federation host config, more CI/CD surfaces, more runtime
-failure modes). With 5 internal tools, it's not worth it yet. The module
-boundaries here are already clean — if one team eventually needs to ship
-their module on its own schedule, you split that one folder out into its own
-app and federate it in, without touching the others.
+Why not true micro-frontends (Module Federation) for all of them? That buys
+independent deploys per team, at the cost of real infra work (shared
+dependency versions, a federation host config, more CI/CD surfaces, more
+runtime failure modes). With 5 internal tools, it's not worth it for most of
+them. The module boundaries here are already clean — if one team eventually
+needs to ship their module on its own schedule, you split that one folder out
+into its own app and federate it in, without touching the others.
+
+**The Administration module is that fifth one** — it's a real,
+independently-buildable Module Federation remote
+([`OpenHub.Administration.UI`](../OpenHub.Administration.UI), built with
+Rspack, not Vite), not a folder in this repo. It's a worked example of what
+"split that one folder out and federate it in" actually involves, including
+every real failure hit doing it. See
+[`docs/module-federation.md`](docs/module-federation.md) for the full
+walkthrough — start there if you're about to federate a second module.
 
 ## How it works
 
-- `src/keycloak.ts` — Keycloak client config (reads `.env`)
+- `src/keycloak.ts` — Keycloak client config (reads `.env`). The **realm is
+  derived from the hostname**, not a fixed env var — see "Multi-tenant login"
+  below.
 - `src/auth/AuthProvider.tsx` — runs Keycloak login on load, exposes the
   logged-in user's roles, handles silent token refresh
 - `src/auth/RoleGate.tsx` — wraps anything that needs a role check
@@ -31,26 +42,56 @@ app and federate it in, without touching the others.
   this one list.
 - `src/pages/Dashboard.tsx` — shows a tile for every module the current user
   has a role for
-- `src/modules/*` — one folder per business app, each just a placeholder
-  page right now
+- `src/modules/*` — one folder per *locally-built* business app (Administration
+  isn't here — see below):
+  - `product/` — full catalog CRUD (list/create/edit, filters, lookups) —
+    the reference example for a module with real API calls and per-tab
+    permissions
+  - `crm/` — a worked `DataTable` example with server-side pagination
+    against a mocked API (swap for a real `fetch()` when there's a real CRM
+    backend)
+  - `helpdesk/`, `ordering/` — still placeholder pages, ready to be filled
+    in the same way
+- `src/federation/` — the contract this shell shares with the one federated
+  remote (Administration). `src/router.tsx` lazy-loads it via
+  `import("adminRemote/AdminApp")`, same `React.lazy` + `<Suspense>` pattern
+  as every other module, just pointed at a URL instead of a local file. See
+  [`docs/module-federation.md`](docs/module-federation.md).
+
+## Multi-tenant login
+
+OpenHub is multi-tenant via one Keycloak realm per organization. The realm to
+log into is derived from the **hostname's subdomain** in `src/keycloak.ts` —
+not a build-time env var — so the same deployed bundle serves every tenant:
+
+- `client-a.openhub.com` → realm `client-a`
+- `admin.openhub.com` → realm `platform-admin` (OpenHub staff only)
+- plain `localhost` (no subdomain) → falls back to `VITE_KEYCLOAK_DEFAULT_REALM`
+
+Locally, browsers resolve `*.localhost` to `127.0.0.1` with no `/etc/hosts`
+edit, so `http://client-a.localhost:5173` and `http://admin.localhost:5173`
+exercise different realms against the same running dev server.
 
 ## Getting started
 
 ```bash
-cp .env.example .env       # fill in your Keycloak URL / realm / client ID
+cp .env.example .env       # fill in your Keycloak URL / client ID / default realm
 npm install
 npm run dev
 ```
 
 You'll need a Keycloak client set up as a **public client** with standard
-flow enabled, and redirect URIs covering `http://localhost:5173/*`.
+flow enabled, and redirect URIs covering `http://localhost:5173/*` (and
+`http://*.localhost:5173/*` if you're testing multi-tenant login locally —
+see "Multi-tenant login" above).
 
 ## Roles used in this starter
 
 | Role | Unlocks |
 |---|---|
 | `helpdesk-user`, `helpdesk-admin` | Help Desk |
-| `system-admin` | Administration |
+| `platform-admin` | Administration → Organizations tab (cross-tenant; `platform-admin` realm only) |
+| `tenant-admin` | Administration → Users tab (self-service, own organization only) |
 | `product-manager` | Product Management → Catalog tab |
 | `warehouse-staff` | Product Management → Warehouse tab |
 | `ordering-user` | Ordering |
@@ -60,9 +101,13 @@ Create these as **realm roles** in Keycloak (simplest) or as roles on the
 `micro-ui-shell` client if you want them scoped to just this app. Assign them
 to users or, better, to Keycloak groups and put users in groups.
 
-Notice Product Management is unlocked by *either* role, but each tab inside
-it checks its own role — that's the pattern to copy when a module has
-finer-grained permissions than "can see this app at all."
+Notice Product Management (and Administration) are unlocked by *either* role,
+but each tab inside checks its own role — that's the pattern to copy when a
+module has finer-grained permissions than "can see this app at all." A
+`platform-admin` also implicitly satisfies anything a `tenant-admin` can do
+(enforced server-side in `OpenHub.Administration.Api`, not just in the UI) —
+the frontend gate here is only about which tabs render, not the source of
+truth for what's actually allowed.
 
 ## Adding a new module
 
@@ -71,6 +116,11 @@ finer-grained permissions than "can see this app at all."
    and a `lazy(() => import(...))` of your component
 3. Done — it now appears as a dashboard tile, a sidebar link, and a route,
    automatically gated by the role(s) you listed
+
+If the module needs to be a genuinely separate, independently-deployable app instead (a team
+that needs its own release schedule) — see
+[`docs/module-federation.md`](docs/module-federation.md), which walks through exactly that using
+Administration as the example.
 
 ## Dark mode
 
@@ -179,6 +229,8 @@ icon set), their React package is
 - If you need permissions *within* a module (e.g. who can edit vs. view CRM
   records), check `hasRole(...)` inside that module rather than adding more
   top-level roles — see the Product Management tabs for the pattern
-- If/when one module needs independent deploys, that's the point to
+- If/when another module needs independent deploys, that's the point to
   introduce Module Federation for that single module — the rest of the app
-  doesn't need to change
+  doesn't need to change. `docs/module-federation.md` walks through doing
+  exactly this for Administration, including every real failure hit along
+  the way

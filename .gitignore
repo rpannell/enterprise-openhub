@@ -29,6 +29,7 @@ coverage/
 **/Properties/launchSettings.json
 # Exception: API projects need launchSettings committed so Aspire can discover their endpoints
 !src/OpenHub.ProductManager.Api/Properties/launchSettings.json
+!src/OpenHub.Administration.Api/Properties/launchSettings.json
 
 # Azure Functions local-only dev settings (may contain local secrets)
 local.settings.json
@@ -38,6 +39,8 @@ local.settings.json
 node_modules/
 dist/
 .vite/
+@mf-types/
+*.tsbuildinfo
 
 # Local env overrides — .env.example is committed, locals are not
 .env.local

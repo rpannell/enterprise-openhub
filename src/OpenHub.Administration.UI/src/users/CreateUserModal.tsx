@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
-import { administrationApi } from "../../../services/administrationApi";
+import { useAdminRuntime } from "../context/AdminRuntimeContext";
 import type { Role } from "../types";
 
 interface CreateUserModalProps {
@@ -25,6 +25,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export function CreateUserModal({ realmSlug, onCreated, onCancel }: CreateUserModalProps) {
+  const { api } = useAdminRuntime();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -37,11 +38,11 @@ export function CreateUserModal({ realmSlug, onCreated, onCancel }: CreateUserMo
   useEffect(() => {
     // The role list already excludes "tenant-admin"/"platform-admin" for a
     // tenant-admin caller — enforced server-side, not filtered here.
-    administrationApi
+    api
       .getAssignableRoles(realmSlug)
       .then(setRoles)
       .catch(() => setRoles([]));
-  }, [realmSlug]);
+  }, [api, realmSlug]);
 
   async function handleSubmit() {
     if (!username.trim() || !email.trim()) {
@@ -51,7 +52,7 @@ export function CreateUserModal({ realmSlug, onCreated, onCancel }: CreateUserMo
     setSaving(true);
     setError(null);
     try {
-      await administrationApi.createOrganizationUser(realmSlug, {
+      await api.createOrganizationUser(realmSlug, {
         username: username.trim(),
         email: email.trim(),
         firstName: firstName.trim() || undefined,

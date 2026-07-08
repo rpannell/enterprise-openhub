@@ -17,7 +17,11 @@ export interface ModuleDef {
   roles: string[];
   // lucide-react icon component — shown on the dashboard tile and sidebar link
   Icon: LucideIcon;
-  Component: React.LazyExoticComponent<React.ComponentType>;
+  // Omitted for modules router.tsx wires up specially instead of rendering
+  // flat (product's nested catalog routes; admin's federated remote, which
+  // needs an auth prop this generic slot can't carry — see AdminRemoteMount
+  // in router.tsx).
+  Component?: React.LazyExoticComponent<React.ComponentType>;
 }
 
 export const modules: ModuleDef[] = [
@@ -40,7 +44,9 @@ export const modules: ModuleDef[] = [
     // — AdminApp itself further gates each tab by which of the two the caller holds.
     roles: ["platform-admin", "tenant-admin"],
     Icon: ShieldCheck,
-    Component: lazy(() => import("../modules/admin/AdminApp")),
+    // No Component here — this module is a Module Federation remote
+    // (src/OpenHub.Administration.UI), loaded via a federated dynamic
+    // import in router.tsx, not a local lazy() import like the others.
   },
   {
     id: "product",

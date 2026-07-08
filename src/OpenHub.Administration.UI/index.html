@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenHub Administration (standalone dev)</title>
+  </head>
+  <body>
+    <!--
+      Only used when this remote runs standalone (`npm run dev` in this
+      project, not through the shell). HtmlRspackPlugin injects the compiled
+      script tags automatically — nothing to reference by hand here.
+      When federated into the shell, this file is never served; the shell's
+      own index.html is what the browser loads, and it pulls this remote's
+      code in via remoteEntry.js instead.
+    -->
+    <div id="root"></div>
+  </body>
+</html>

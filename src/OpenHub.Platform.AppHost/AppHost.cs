@@ -35,11 +35,25 @@ var redis =
     builder.AddRedis("Redis")
            .WithDataVolume();
 
-var elasticsearchPassword = builder.AddParameter("elasticsearch-password", value: "Dev_P@ssw0rd1!", secret: true);
+// No "@" (or other URI-reserved characters) — unlike Postgres/RabbitMQ, which use
+// key=value connection strings immune to this, Aspire's Elasticsearch hosting
+// integration builds a "https://elastic:{password}@{host}:{port}" URI directly from
+// this value. An unescaped "@" in the password (the same "Dev_P@ssw0rd1!" convention
+// used elsewhere in this file) gets misread as the userinfo/host separator, so
+// everything after it is parsed as part of the hostname and fails with
+// "Invalid URI: The hostname could not be parsed."
+var elasticsearchPassword = builder.AddParameter("elasticsearch-password", value: "Dev-ElasticPass1!", secret: true);
 
 var elasticsearch =
     builder.AddElasticsearch("Elasticsearch", password: elasticsearchPassword)
-           .WithDataVolume();
+           .WithDataVolume()
+           // Elasticsearch's default JVM heap sizing can exceed what's actually
+           // available once this many containers (including Keycloak's own JVM)
+           // share one Docker Desktop VM — it gets silently OOM-killed (exit 137,
+           // "died while starting up") rather than failing with a clear error.
+           // Capped low enough for local dev; raise Docker Desktop's memory limit
+           // instead if Elasticsearch still won't stay up.
+           .WithEnvironment("ES_JAVA_OPTS", "-Xms512m -Xmx512m");
 
 var minio =
     builder.AddContainer("minio", "quay.io/minio/minio")
@@ -135,6 +149,11 @@ var flyway = builder.AddContainer("flyway-catalog", "flyway/flyway", "latest")
     .WaitFor(catalogDb);
 
 var frontend = builder.AddViteApp("shell", "../OpenHub.UI")
+    // Without this, Aspire assigns a random port each run (observed: 60465) instead
+    // of honoring vite.config.ts's own server.port: 5173 — the .WithUrl() links below
+    // hardcode :5173, so an unpinned port makes them all silently point at a dead
+    // port ("host unreachable"/connection refused) with no obvious link back to this.
+    .WithHttpEndpoint(port: 5173)
     .WithReference(keycloak)
     .WithEnvironment("VITE_KEYCLOAK_URL", keycloak.GetEndpoint("http"))
     // Fallback realm when the hostname has no recognizable subdomain (e.g. plain
@@ -143,7 +162,35 @@ var frontend = builder.AddViteApp("shell", "../OpenHub.UI")
     // "platform-admin"), so a real deployment needs no per-realm env var at all.
     .WithEnvironment("VITE_KEYCLOAK_DEFAULT_REALM", "client-a")
     .WithEnvironment("VITE_KEYCLOAK_CLIENT_ID", "micro-ui-shell")
-    .WithExternalHttpEndpoints();
+    .WithExternalHttpEndpoints()
+    // Same Vite dev server (fixed at :5173 in vite.config.ts), three different
+    // hostnames — keycloak.ts resolves the realm from whichever one you click.
+    // The dashboard's own "Endpoint" link only ever shows the bare
+    // http://localhost:5173, which always falls back to VITE_KEYCLOAK_DEFAULT_REALM
+    // above (client-a) — these give one-click access to the other realms too.
+    .WithUrl("http://client-a.localhost:5173", "Client A")
+    .WithUrl("http://client-b.localhost:5173", "Client B")
+    .WithUrl("http://admin.localhost:5173", "Platform Admin");
+
+// A genuine Module Federation remote — built with Rspack, not Vite, and
+// deliberately not wired via .WithReference()/service discovery the way
+// the .NET APIs are. The shell finds it by a plain hardcoded dev URL in
+// vite.config.ts (federation's `remotes` config), the same way a real
+// deployment would point at wherever this remote's static assets are
+// actually hosted — that URL is the whole integration surface, not
+// Aspire's resource graph. See docs/module-federation.md.
+// No .WithHttpEndpoint() here — Aspire's DCP wraps declared HTTP endpoints in its own
+// loopback-bound proxy (127.0.0.1/::1), and that proxy hangs indefinitely in front of this
+// specific rspack dev server (confirmed: the raw rspack process responds instantly when hit
+// directly via its LAN-bound address, e.g. http://192.168.68.65:5175/, but every request through
+// DCP's proxy on localhost:5175 times out with no response — TCP accepted, HTTP never answered).
+// AddViteApp's "shell" resource uses the identical WithHttpEndpoint/proxy pattern and works fine,
+// so this is specific to how DCP's proxy interacts with rspack's dev server, not a general Aspire
+// or Module Federation problem. Since this remote isn't wired via .WithReference()/service
+// discovery anyway (see comment above), it doesn't need an Aspire-tracked endpoint — the shell
+// talks to devServer.port in rspack.config.ts directly. Aspire still starts/monitors the process
+// for the dashboard; it just won't show a clickable URL for it.
+var adminUiRemote = builder.AddJavaScriptApp("admin-ui-remote", "../OpenHub.Administration.UI", "dev");
 
 var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>("product-manager-api")
     .WithHttpEndpoint(port: 5200)
