@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenHub.Accessor.KeyCloak.Interfaces;
+using OpenHub.Accessor.KeyCloak.Internal;
 using OpenHub.Accessor.KeyCloak.Models;
 
 namespace OpenHub.Accessor.KeyCloak.Extensions;
@@ -15,6 +16,11 @@ public static class KeyCloakAccessorExtensions
     {
         services.Configure<KeyCloakOptions>(configuration.GetSection(KeyCloakOptions.SectionName));
 
+        // Singleton so the cached admin token survives across accessor instances —
+        // each typed client below is resolved fresh per injection, but they all share
+        // this one token cache/semaphore.
+        services.AddSingleton<KeyCloakAdminTokenProvider>();
+
         // BaseAddress resolves in priority order:
         //   1. KeyCloak:BaseUrl (explicit config or Vault secret)
         //   2. ConnectionStrings:KeyCloak (injected by Aspire WithReference(keycloak))
@@ -25,22 +31,28 @@ public static class KeyCloakAccessorExtensions
         // the singleton bypasses the typed-client factory and gets a bare HttpClient
         // with no BaseAddress configured.
         services.AddHttpClient<IKeyCloakRealmAccessor, KeyCloakRealmAccessor>()
-            .ConfigureHttpClient((sp, client) =>
-            {
-                var opts = sp.GetRequiredService<IOptions<KeyCloakOptions>>().Value;
-                var cfg  = sp.GetRequiredService<IConfiguration>();
-
-                var baseUrl = !string.IsNullOrWhiteSpace(opts.BaseUrl)
-                    ? opts.BaseUrl
-                    : cfg.GetConnectionString("KeyCloak");
-
-                if (string.IsNullOrWhiteSpace(baseUrl))
-                    throw new InvalidOperationException(
-                        "Keycloak base URL not configured. Set KeyCloak:BaseUrl or ConnectionStrings:KeyCloak.");
-
-                client.BaseAddress = new Uri(baseUrl);
-            });
+            .ConfigureHttpClient(ConfigureKeyCloakBaseAddress);
+        services.AddHttpClient<IKeyCloakOrganizationAccessor, KeyCloakOrganizationAccessor>()
+            .ConfigureHttpClient(ConfigureKeyCloakBaseAddress);
+        services.AddHttpClient<IKeyCloakUserAccessor, KeyCloakUserAccessor>()
+            .ConfigureHttpClient(ConfigureKeyCloakBaseAddress);
         return services;
+    }
+
+    private static void ConfigureKeyCloakBaseAddress(IServiceProvider sp, HttpClient client)
+    {
+        var opts = sp.GetRequiredService<IOptions<KeyCloakOptions>>().Value;
+        var cfg = sp.GetRequiredService<IConfiguration>();
+
+        var baseUrl = !string.IsNullOrWhiteSpace(opts.BaseUrl)
+            ? opts.BaseUrl
+            : cfg.GetConnectionString("KeyCloak");
+
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            throw new InvalidOperationException(
+                "Keycloak base URL not configured. Set KeyCloak:BaseUrl or ConnectionStrings:KeyCloak.");
+
+        client.BaseAddress = new Uri(baseUrl);
     }
 
     /// <summary>

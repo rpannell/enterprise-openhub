@@ -33,9 +33,12 @@ export const modules: ModuleDef[] = [
   {
     id: "admin",
     name: "Administration",
-    description: "Users, roles, and system settings",
+    description: "Organizations, users, and roles",
     path: "/admin",
-    roles: ["system-admin"],
+    // "platform-admin" (organization onboarding, platform-admin realm only) and
+    // "tenant-admin" (self-service user management within one's own organization)
+    // — AdminApp itself further gates each tab by which of the two the caller holds.
+    roles: ["platform-admin", "tenant-admin"],
     Icon: ShieldCheck,
     Component: lazy(() => import("../modules/admin/AdminApp")),
   },

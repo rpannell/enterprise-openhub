@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using OpenHub.Accessor.KeyCloak.Internal;
 using OpenHub.Accessor.KeyCloak.Tests.Fakes;
 using Shouldly;
 using Xunit;
@@ -22,7 +23,8 @@ public class KeyCloakRealmAccessorTests
             AdminUsername = adminUsername,
             AdminPassword = adminPassword,
         });
-        return new KeyCloakRealmAccessor(httpClient, options);
+        var tokenProvider = new KeyCloakAdminTokenProvider(options);
+        return new KeyCloakRealmAccessor(httpClient, tokenProvider);
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, string json)

@@ -4,11 +4,15 @@ import Shell from "./layout/Shell";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 import { RoleGate } from "./auth/RoleGate";
+import { useAuth } from "./auth/AuthProvider";
 import { modules } from "./config/modules";
 import ProductApp from "./modules/product/ProductApp";
 import ProductList from "./modules/product/catalog/ProductList";
 import ProductCreatePage from "./modules/product/catalog/ProductCreatePage";
 import ProductEditPage from "./modules/product/catalog/ProductEditPage";
+import AdminApp from "./modules/admin/AdminApp";
+import OrganizationList from "./modules/admin/organizations/OrganizationList";
+import UserList from "./modules/admin/users/UserList";
 
 function Loading() {
   return (
@@ -27,8 +31,14 @@ function Forbidden() {
   );
 }
 
+function AdminIndexRedirect() {
+  const { hasRole } = useAuth();
+  return <Navigate to={hasRole("platform-admin") ? "organizations" : "users"} replace />;
+}
+
 const productModule = modules.find((m) => m.id === "product")!;
-const otherModules = modules.filter((m) => m.id !== "product");
+const adminModule = modules.find((m) => m.id === "admin")!;
+const otherModules = modules.filter((m) => m.id !== "product" && m.id !== "admin");
 
 export const router = createBrowserRouter([
   {
@@ -51,6 +61,21 @@ export const router = createBrowserRouter([
           { path: "catalog", element: <ProductList /> },
           { path: "catalog/new", element: <ProductCreatePage /> },
           { path: "catalog/:id/edit", element: <ProductEditPage /> },
+        ],
+      },
+
+      // Administration module — nested routes for organizations, users
+      {
+        path: "admin",
+        element: (
+          <RoleGate roles={adminModule.roles} fallback={<Forbidden />}>
+            <AdminApp />
+          </RoleGate>
+        ),
+        children: [
+          { index: true, element: <AdminIndexRedirect /> },
+          { path: "organizations", element: <OrganizationList /> },
+          { path: "users", element: <UserList /> },
         ],
       },
 

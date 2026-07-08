@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\OpenHub.Administration.Api\OpenHub.Administration.Api.csproj" />
     <ProjectReference Include="..\OpenHub.ProductManager.Api\OpenHub.ProductManager.Api.csproj" />
     <ProjectReference Include="..\OpenHub.ProductManager.ElasticProcessor\OpenHub.ProductManager.ElasticProcessor.csproj" />
     <ProjectReference Include="..\OpenHub.ProductManager.IdentityEventProcessor\OpenHub.ProductManager.IdentityEventProcessor.csproj" />
