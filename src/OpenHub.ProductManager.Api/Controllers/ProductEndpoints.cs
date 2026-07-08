@@ -53,16 +53,19 @@ public static class ProductEndpoints
             ProductMapper mapper,
             CancellationToken ct) =>
         {
-            var dto = await manager.GetByIdAsync(id, ct);
-            return dto is null
-                ? Results.NotFound()
-                : Results.Ok(mapper.ToResponse(dto));
+            var (dto, isDeleted) = await manager.GetByIdAsync(id, ct);
+            return dto is not null
+                ? Results.Ok(mapper.ToResponse(dto))
+                : isDeleted
+                    ? Results.StatusCode(StatusCodes.Status410Gone)
+                    : Results.NotFound();
         })
         .WithName("GetProductById")
         .WithSummary("Get a product by ID")
-        .WithDescription("Returns a single product. Returns 404 if the product does not exist, has been soft-deleted, or belongs to a different tenant.")
+        .WithDescription("Returns a single product. Returns 404 if the product does not exist or belongs to a different tenant. Returns 410 if the product has been soft-deleted.")
         .Produces<ProductResponse>(StatusCodes.Status200OK)
-        .Produces(StatusCodes.Status404NotFound);
+        .Produces(StatusCodes.Status404NotFound)
+        .Produces(StatusCodes.Status410Gone);
 
         group.MapPost("/", async (
             [FromBody] CreateProductRequest request,

@@ -195,6 +195,52 @@ public class ProductAccessorRlsIntegrationTests(PostgresCollectionFixture fixtur
     }
 
     [Fact]
+    public async Task GetPagedAsync_SoftDeletedProduct_IsExcludedByQueryFilter()
+    {
+        var (tenantA, _, productIds) = await SeedTenantWithProductsAsync(
+            "tenant-a-" + Guid.NewGuid().ToString("N")[..8], 3, includeSoftDeleted: true);
+
+        await using var db = fixture.CreateDbContext();
+        var accessor = CreateAccessor(db, tenantA);
+
+        var (items, totalCount) = await accessor.GetPagedAsync(
+            page: 1, pageSize: 25, search: null, manufacturerId: null, brandId: null,
+            conditionTypeId: null, availabilityStatusId: null, isActive: null, isPublished: null);
+
+        totalCount.ShouldBe(2);
+        items.Select(p => p.Id).ShouldNotContain(productIds[^1]);
+    }
+
+    [Fact]
+    public async Task GetByIdIncludingDeletedAsync_SoftDeletedProduct_ReturnsItWithDeletedAtSet()
+    {
+        var (tenantA, _, productIds) = await SeedTenantWithProductsAsync(
+            "tenant-a-" + Guid.NewGuid().ToString("N")[..8], 1, includeSoftDeleted: true);
+
+        await using var db = fixture.CreateDbContext();
+        var accessor = CreateAccessor(db, tenantA);
+
+        var result = await accessor.GetByIdIncludingDeletedAsync(productIds[0]);
+
+        result.ShouldNotBeNull();
+        result.DeletedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task GetByIdIncludingDeletedAsync_ProductBelongsToDifferentTenant_ReturnsNull()
+    {
+        var (_, _, productsA) = await SeedTenantWithProductsAsync("tenant-a-" + Guid.NewGuid().ToString("N")[..8], 1);
+        var (tenantB, _, _) = await SeedTenantWithProductsAsync("tenant-b-" + Guid.NewGuid().ToString("N")[..8], 1);
+
+        await using var db = fixture.CreateDbContext();
+        var accessorAsTenantB = CreateAccessor(db, tenantB);
+
+        var result = await accessorAsTenantB.GetByIdIncludingDeletedAsync(productsA[0]);
+
+        result.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task SoftDeleteAsync_MarksDeletedAtAndDeleteUserId()
     {
         var (tenantA, userId, productIds) = await SeedTenantWithProductsAsync(

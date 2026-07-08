@@ -72,7 +72,7 @@ public class ProductEndpointsTests : IClassFixture<ProductManagerApiFactory>
         var productId = Guid.NewGuid();
         _factory.ProductManagerMock
             .GetByIdAsync(productId, Arg.Any<CancellationToken>())
-            .Returns(new ProductDto { Id = productId, Sku = "SKU-1", Name = "Widget" });
+            .Returns((new ProductDto { Id = productId, Sku = "SKU-1", Name = "Widget" }, false));
 
         var client = _factory.CreateClient();
         var response = await client.GetAsync($"/api/v1/products/{productId}");
@@ -87,12 +87,25 @@ public class ProductEndpointsTests : IClassFixture<ProductManagerApiFactory>
     {
         _factory.ProductManagerMock
             .GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns((ProductDto?)null);
+            .Returns(((ProductDto?)null, false));
 
         var client = _factory.CreateClient();
         var response = await client.GetAsync($"/api/v1/products/{Guid.NewGuid()}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetProductById_Deleted_Returns410()
+    {
+        _factory.ProductManagerMock
+            .GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(((ProductDto?)null, true));
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync($"/api/v1/products/{Guid.NewGuid()}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Gone);
     }
 
     [Fact]

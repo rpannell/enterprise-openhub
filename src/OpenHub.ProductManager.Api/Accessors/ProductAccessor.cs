@@ -31,6 +31,21 @@ public class ProductAccessor(CatalogDbContext db, IHttpContextAccessor http) : I
         });
     }
 
+    public async Task<ProductEntity?> GetByIdIncludingDeletedAsync(Guid id, CancellationToken ct = default)
+    {
+        var tenantId = TenantId;
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await SetTenantContextAsync(tenantId, ct);
+            var result = await db.Products.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == id, ct);
+            await tx.CommitAsync(ct);
+            return result;
+        });
+    }
+
     public async Task<IReadOnlyList<ProductEntity>> GetAllAsync(CancellationToken ct = default)
     {
         var tenantId = TenantId;

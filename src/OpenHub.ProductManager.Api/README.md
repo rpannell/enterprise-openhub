@@ -214,13 +214,23 @@ All routes are versioned under `/api/v{version}/`.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/v1/products` | List all products for the tenant |
-| `GET` | `/api/v1/products/{id}` | Get product by ID |
+| `GET` | `/api/v1/products/{id}` | Get product by ID — `404` if never existed or wrong tenant, `410` if soft-deleted |
 | `POST` | `/api/v1/products` | Create a product |
 | `PUT` | `/api/v1/products/{id}` | Update a product |
 | `DELETE` | `/api/v1/products/{id}` | Soft-delete a product |
 | `GET` | `/api/v1/admin/tenants` | List active tenants (platform-admin only — see Authentication) |
 
 Full request/response schemas are in the Scalar UI at `/api-docs`.
+
+### Soft delete and the 410 response
+
+Deleting a product sets `deleted_at` rather than removing the row. Soft-deleted products are excluded from every list/paged/get response automatically (an EF Core global query filter on `deleted_at IS NULL` — see `ProductConfiguration`), so callers never need to filter them out themselves.
+
+`GET /api/v1/products/{id}` distinguishes two "missing" cases that a plain 404 can't tell apart:
+- **`404 Not Found`** — the ID never existed, or belongs to a different tenant.
+- **`410 Gone`** — the product existed but was soft-deleted.
+
+**Relevant to event-driven consumers** (e.g. the Elasticsearch sync worker, reindex jobs): a `ProductChangedEvent` can be processed after the product has since been soft-deleted — the consumer fetches by ID to hydrate the document and gets `410` instead of the `200` it expected. Treat `410` the same as "this product is gone" (skip/remove from the downstream index), not as an unexpected error to fail on. `410` was chosen specifically so this case is distinguishable from a genuine `404` (bad ID, bug, wrong tenant token) that *should* be treated as a real failure.
 
 ---
 
