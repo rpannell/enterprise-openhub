@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { X } from "lucide-react";
-import { administrationApi } from "../../../services/administrationApi";
+import { useAdminRuntime } from "../context/AdminRuntimeContext";
 
 interface CreateOrganizationModalProps {
   onCreated: () => void;
@@ -23,6 +23,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 export function CreateOrganizationModal({ onCreated, onCancel }: CreateOrganizationModalProps) {
+  const { api } = useAdminRuntime();
   const [realmSlug, setRealmSlug] = useState("");
   const [name, setName] = useState("");
   const [alias, setAlias] = useState("");
@@ -38,7 +39,7 @@ export function CreateOrganizationModal({ onCreated, onCancel }: CreateOrganizat
     setSaving(true);
     setError(null);
     try {
-      await administrationApi.createOrganization({
+      await api.createOrganization({
         realmSlug: realmSlug.trim(),
         name: name.trim(),
         alias: alias.trim(),

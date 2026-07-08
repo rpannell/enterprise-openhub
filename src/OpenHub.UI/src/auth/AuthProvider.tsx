@@ -17,6 +17,8 @@ interface AuthState {
   hasRole: (role: string) => boolean;
   hasAnyRole: (roles: string[]) => boolean;
   logout: () => void;
+  /** Returns a fresh bearer token — the one thing federated remotes get instead of their own Keycloak session. */
+  getToken: () => Promise<string>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -67,6 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasAnyRole: (required: string[]) =>
         required.length === 0 || required.some((r) => roles.includes(r)),
       logout: () => keycloak.logout({ redirectUri: window.location.origin }),
+      getToken: async () => {
+        await keycloak.updateToken(30).catch(() => keycloak.login());
+        return keycloak.token!;
+      },
     }),
     [initialized, authenticated, roles]
   );

@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { DataTable } from "../../../components/DataTable";
-import { administrationApi } from "../../../services/administrationApi";
-import { useAuth } from "../../../auth/AuthProvider";
-import { KEYCLOAK_REALM } from "../../../keycloak";
+import { DataTable } from "../components/DataTable";
+import { useAdminRuntime } from "../context/AdminRuntimeContext";
 import type { Organization, OrgUser } from "../types";
 import { CreateUserModal } from "./CreateUserModal";
 
@@ -23,13 +21,14 @@ function StatusBadge({ enabled }: { enabled: boolean }) {
 }
 
 export default function UserList() {
-  const { hasRole } = useAuth();
+  const { api, hasRole, realmSlug: ownRealmSlug } = useAdminRuntime();
   const isPlatformAdmin = hasRole("platform-admin");
 
-  // A tenant-admin always manages their own realm (derived from the hostname at
-  // login — see keycloak.ts); a platform-admin picks which organization to view.
+  // A tenant-admin always manages their own realm (resolved by the shell at
+  // login and handed down via the federation contract); a platform-admin
+  // picks which organization to view.
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [realmSlug, setRealmSlug] = useState(isPlatformAdmin ? "" : KEYCLOAK_REALM);
+  const [realmSlug, setRealmSlug] = useState(isPlatformAdmin ? "" : ownRealmSlug);
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,23 +36,26 @@ export default function UserList() {
 
   useEffect(() => {
     if (!isPlatformAdmin) return;
-    administrationApi.getOrganizations().then((orgs) => {
-      setOrganizations(orgs);
-      setRealmSlug((current) => current || orgs[0]?.realmSlug || "");
-    });
-  }, [isPlatformAdmin]);
+    api
+      .getOrganizations()
+      .then((orgs) => {
+        setOrganizations(orgs);
+        setRealmSlug((current) => current || orgs[0]?.realmSlug || "");
+      })
+      .catch(() => setError("Failed to load organizations."));
+  }, [api, isPlatformAdmin]);
 
   function reload() {
     if (!realmSlug) return;
     setLoading(true);
-    administrationApi
+    api
       .getOrganizationUsers(realmSlug)
       .then(setUsers)
       .catch(() => setError("Failed to load users."))
       .finally(() => setLoading(false));
   }
 
-  useEffect(reload, [realmSlug]);
+  useEffect(reload, [api, realmSlug]);
 
   const columns: ColumnDef<OrgUser, any>[] = [
     { accessorKey: "username", header: "Username" },

@@ -1,18 +1,23 @@
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import Shell from "./layout/Shell";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 import { RoleGate } from "./auth/RoleGate";
 import { useAuth } from "./auth/AuthProvider";
+import { KEYCLOAK_REALM } from "./keycloak";
 import { modules } from "./config/modules";
 import ProductApp from "./modules/product/ProductApp";
 import ProductList from "./modules/product/catalog/ProductList";
 import ProductCreatePage from "./modules/product/catalog/ProductCreatePage";
 import ProductEditPage from "./modules/product/catalog/ProductEditPage";
-import AdminApp from "./modules/admin/AdminApp";
-import OrganizationList from "./modules/admin/organizations/OrganizationList";
-import UserList from "./modules/admin/users/UserList";
+
+// A genuine Module Federation remote — a separately built (Rspack),
+// separately deployable artifact (src/OpenHub.Administration.UI), not a
+// local folder. React.lazy works unchanged with a federated dynamic
+// import(): the runtime resolves "adminRemote/AdminApp" to whatever
+// remoteEntry.js the federation plugin configured (see vite.config.ts).
+const FederatedAdminApp = lazy(() => import("adminRemote/AdminApp"));
 
 function Loading() {
   return (
@@ -31,9 +36,15 @@ function Forbidden() {
   );
 }
 
-function AdminIndexRedirect() {
-  const { hasRole } = useAuth();
-  return <Navigate to={hasRole("platform-admin") ? "organizations" : "users"} replace />;
+/**
+ * The entire integration surface for the federated Admin remote: resolve
+ * the HostAuthContext once, hand it to the remote as a prop, done. The
+ * remote owns everything under /admin/* from here — its own tabs, its own
+ * nested routes (organizations/users) — the shell doesn't know they exist.
+ */
+function AdminRemoteMount() {
+  const { roles, getToken } = useAuth();
+  return <FederatedAdminApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
 }
 
 const productModule = modules.find((m) => m.id === "product")!;
@@ -64,32 +75,35 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // Administration module — nested routes for organizations, users
+      // Administration module — federated remote, mounted whole. The
+      // trailing "/*" hands every sub-path (organizations, users, ...) to
+      // the remote's own <Routes> instead of declaring them here.
       {
-        path: "admin",
+        path: "admin/*",
         element: (
           <RoleGate roles={adminModule.roles} fallback={<Forbidden />}>
-            <AdminApp />
-          </RoleGate>
-        ),
-        children: [
-          { index: true, element: <AdminIndexRedirect /> },
-          { path: "organizations", element: <OrganizationList /> },
-          { path: "users", element: <UserList /> },
-        ],
-      },
-
-      // All other modules remain flat
-      ...otherModules.map((m) => ({
-        path: m.path.slice(1),
-        element: (
-          <RoleGate roles={m.roles} fallback={<Forbidden />}>
             <Suspense fallback={<Loading />}>
-              <m.Component />
+              <AdminRemoteMount />
             </Suspense>
           </RoleGate>
         ),
-      })),
+      },
+
+      // All other modules remain flat — Component is guaranteed here since
+      // otherModules excludes the two ids (product, admin) that omit it.
+      ...otherModules.map((m) => {
+        const Component = m.Component!;
+        return {
+          path: m.path.slice(1),
+          element: (
+            <RoleGate roles={m.roles} fallback={<Forbidden />}>
+              <Suspense fallback={<Loading />}>
+                <Component />
+              </Suspense>
+            </RoleGate>
+          ),
+        };
+      }),
 
       { path: "*", element: <Navigate to="/" replace /> },
     ],

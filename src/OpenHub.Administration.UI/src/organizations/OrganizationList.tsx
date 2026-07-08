@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { DataTable } from "../../../components/DataTable";
-import { administrationApi } from "../../../services/administrationApi";
+import { DataTable } from "../components/DataTable";
+import { useAdminRuntime } from "../context/AdminRuntimeContext";
 import type { Organization } from "../types";
 import { CreateOrganizationModal } from "./CreateOrganizationModal";
 
@@ -21,6 +21,7 @@ function StatusBadge({ enabled }: { enabled: boolean }) {
 }
 
 export default function OrganizationList() {
+  const { api } = useAdminRuntime();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export default function OrganizationList() {
 
   function reload() {
     setLoading(true);
-    administrationApi
+    api
       .getOrganizations()
       .then(setOrganizations)
       .catch(() => setError("Failed to load organizations."))
