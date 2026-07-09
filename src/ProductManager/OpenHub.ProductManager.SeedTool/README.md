@@ -124,3 +124,12 @@ standalone — see `Database/ProductManager/`), including the `ref.categories`/`
 the Aspire AppHost first at least once so migrations have applied, then point this tool at the same
 database. If using `--publish-events`, RabbitMQ must be reachable too (the tool declares the
 `product.changed` exchange itself if missing).
+
+## No OpenTelemetry
+
+This tool intentionally does **not** reference `OpenHub.Platform.ServiceDefaults` and has no
+OpenTelemetry instrumentation, unlike every other project in the platform. It's a one-shot,
+manually-invoked CLI dev/load-testing tool, not a long-running API or background job — there's no
+running process to trace/export metrics from. If it's ever turned into something that runs
+unattended (a scheduled job, etc.), it should pick up `AddServiceDefaults()` like the other
+background jobs at that point.

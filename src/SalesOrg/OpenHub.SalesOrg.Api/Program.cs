@@ -13,11 +13,11 @@ using OpenHub.SalesOrg.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Platform defaults (OpenTelemetry, health checks, service discovery, CORS) ─
-builder.AddServiceDefaults();
-
 // ── External configuration — system-wide first, service-specific second ───────
-// Skipped silently if Consul:Url or Vault:Address env vars are not set.
+// Skipped silently if Consul:Url or Vault:Address env vars are not set. Must run before
+// AddServiceDefaults() so Otel:CollectorEndpoint (and any other Consul-sourced config) is
+// visible to it — builder.Configuration is a live ConfigurationManager, so sources added later
+// aren't seen by eager reads done during AddServiceDefaults().
 builder.AddConsulConfiguration(
     "platform/config",       // system-wide: logging levels, Keycloak URLs, feature flags
     "salesorg/config");      // service-specific overrides
@@ -25,6 +25,9 @@ builder.AddConsulConfiguration(
 builder.AddVaultSecrets(
     "platform",  // system-wide secrets: shared creds, signing keys
     "salesorg"); // service-specific secrets: DB passwords, API keys
+
+// ── Platform defaults (OpenTelemetry, health checks, service discovery, CORS) ─
+builder.AddServiceDefaults();
 
 // ── Database ─────────────────────────────────────────────────────────────────
 builder.AddNpgsqlDbContext<SalesOrgDbContext>("SalesOrg");

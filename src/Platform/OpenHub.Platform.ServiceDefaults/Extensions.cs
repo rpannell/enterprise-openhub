@@ -7,6 +7,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery;
 using OpenTelemetry;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Microsoft.Extensions.Configuration;
@@ -82,7 +83,11 @@ public static class Extensions
                     // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                     //.AddGrpcClientInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddEntityFrameworkCoreInstrumentation();
+                    .AddEntityFrameworkCoreInstrumentation()
+                    // Resolves IConnectionMultiplexer from DI lazily (deferred until the
+                    // TracerProvider is actually built) — works for every service that calls
+                    // AddRedisDistributedCache("Redis"), no explicit connection wiring needed here.
+                    .AddRedisInstrumentation();
             });
 
         builder.AddOpenTelemetryExporters();
@@ -92,11 +97,28 @@ public static class Extensions
 
     private static TBuilder AddOpenTelemetryExporters<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        // Aspire's dev orchestration injects OTEL_EXPORTER_OTLP_ENDPOINT automatically, pointing
+        // at the Aspire dashboard's own collector — prefer that when present so local dev
+        // telemetry keeps showing up there. Otherwise fall back to the platform-wide collector
+        // endpoint from Consul (Otel:CollectorEndpoint under platform/config), for
+        // standalone/production runs where Aspire isn't orchestrating.
+        //
+        // Reading Otel:CollectorEndpoint here requires AddConsulConfiguration()/AddVaultSecrets()
+        // to have already run before AddServiceDefaults() in Program.cs — builder.Configuration
+        // is a live ConfigurationManager, so sources added afterward aren't visible to this eager
+        // read yet.
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+            ?? builder.Configuration["Otel:CollectorEndpoint"];
 
-        if (useOtlpExporter)
+        if (!string.IsNullOrWhiteSpace(otlpEndpoint))
         {
-            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+            var endpointUri = new Uri(otlpEndpoint);
+            // gRPC (port 4317 by convention) matches the collector endpoint shape used platform-wide.
+            builder.Services.AddOpenTelemetry().UseOtlpExporter(OtlpExportProtocol.Grpc, endpointUri);
+
+            // UseOtlpExporter() above covers traces/metrics/logs uniformly. Metrics additionally
+            // keep the existing Prometheus scrape exporter (see WithMetrics above) — both push
+            // (OTLP) and pull (/metrics) paths stay available side by side.
         }
 
         // Uncomment the following lines to enable the Azure Monitor exporter (requires the Azure.Monitor.OpenTelemetry.AspNetCore package)

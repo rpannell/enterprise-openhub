@@ -9,10 +9,11 @@ using OpenHub.ProductManager.ReindexJob.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.AddServiceDefaults();
-
+// Must run before AddServiceDefaults() so Otel:CollectorEndpoint is visible to it.
 builder.AddConsulConfiguration("platform/config", "product-manager-reindex-job/config");
 builder.AddVaultSecrets("product-manager", "product-manager-reindex-job");
+
+builder.AddServiceDefaults();
 
 builder.AddRedisDistributedCache("Redis");
 

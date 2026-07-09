@@ -8,13 +8,14 @@ using OpenHub.ProductManager.ElasticProcessor.Messaging.Setup;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.AddServiceDefaults();
-
 // Identity of the M2M-token-consuming component is intentionally NOT renamed to match
 // this project — these literal path strings match the already-provisioned Keycloak
 // client and Vault secret. See README.md.
+// Must run before AddServiceDefaults() so Otel:CollectorEndpoint is visible to it.
 builder.AddConsulConfiguration("platform/config", "product-manager-function/config");
 builder.AddVaultSecrets("platform", "product-manager-function");
+
+builder.AddServiceDefaults();
 
 builder.AddRedisDistributedCache("Redis");
 
