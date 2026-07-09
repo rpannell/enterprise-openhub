@@ -1,5 +1,7 @@
 # OpenHub (Enterprise CRM)
 
+Project homepage: [openhubcrm.com](https://openhubcrm.com)
+
 OpenHub is a multi-tenant internal platform: a role-gated React shell in front of a set of .NET backend services, isolated per tenant via Keycloak realms, Postgres Row Level Security, and (for search) per-tenant Elasticsearch aliases. **Product Manager** — a multi-tenant product catalog with full-text search — is the first module built out end to end; Help Desk, Ordering, and CRM are placeholders in the UI shell today.
 
 Day-to-day local development runs entirely through **.NET Aspire** (one `dotnet run` spins up every dependency — Postgres, Redis, RabbitMQ, Elasticsearch, Keycloak, Consul, Vault — plus every service, pre-wired). The raw Kubernetes manifests under `infrastructure/k8s/` are the production-style path: standing up the same dependencies by hand on a local Docker Desktop Kubernetes cluster, useful for testing deployment workflows without Aspire in the loop.

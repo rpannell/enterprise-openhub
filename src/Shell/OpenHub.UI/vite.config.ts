@@ -25,6 +25,16 @@ export default defineConfig({
           entryGlobalName: "adminRemote",
           shareScope: "default",
         },
+        crmRemote: {
+          type: "module",
+          name: "crmRemote",
+          // Same build-time-resolution pattern as adminRemote above. Must match
+          // OpenHub.CRM.UI's own `PUBLIC_PATH` build arg plus "remoteEntry.js".
+          // Passed as `docker build --build-arg CRM_REMOTE_URL=...` here.
+          entry: process.env.CRM_REMOTE_URL ?? "http://localhost:5176/remoteEntry.js",
+          entryGlobalName: "crmRemote",
+          shareScope: "default",
+        },
       },
       // NOT react-router-dom — see docs/module-federation.md "The router-sharing
       // deadlock". Sharing it as a singleton forced the MF runtime to eagerly
@@ -57,6 +67,16 @@ export default defineConfig({
       "/adm": {
         target: "http://localhost:5300",
         rewrite: (path) => path.replace(/^\/adm/, ""),
+        changeOrigin: true,
+      },
+      "/crmapi": {
+        target: "http://localhost:5400",
+        rewrite: (path) => path.replace(/^\/crmapi/, ""),
+        changeOrigin: true,
+      },
+      "/salesorgapi": {
+        target: "http://localhost:5500",
+        rewrite: (path) => path.replace(/^\/salesorgapi/, ""),
         changeOrigin: true,
       },
     },

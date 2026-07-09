@@ -12,7 +12,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.AddServiceDefaults();
 
 builder.AddConsulConfiguration("platform/config", "product-manager-reindex-job/config");
-builder.AddVaultSecrets("platform", "product-manager-reindex-job");
+builder.AddVaultSecrets("product-manager", "product-manager-reindex-job");
 
 builder.AddRedisDistributedCache("Redis");
 

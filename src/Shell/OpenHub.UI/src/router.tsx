@@ -19,6 +19,9 @@ import ProductEditPage from "./modules/product/catalog/ProductEditPage";
 // remoteEntry.js the federation plugin configured (see vite.config.ts).
 const FederatedAdminApp = lazy(() => import("adminRemote/AdminApp"));
 
+// Same pattern, second federated remote (src/CRM/OpenHub.CRM.UI) — see FederatedAdminApp above.
+const FederatedCrmApp = lazy(() => import("crmRemote/CrmApp"));
+
 function Loading() {
   return (
     <div className="p-6 text-sm text-slate-500 dark:text-slate-400">
@@ -47,9 +50,20 @@ function AdminRemoteMount() {
   return <FederatedAdminApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
 }
 
+/**
+ * Same integration surface as AdminRemoteMount above, for the CRM remote.
+ */
+function CrmRemoteMount() {
+  const { roles, getToken } = useAuth();
+  return <FederatedCrmApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
+}
+
 const productModule = modules.find((m) => m.id === "product")!;
 const adminModule = modules.find((m) => m.id === "admin")!;
-const otherModules = modules.filter((m) => m.id !== "product" && m.id !== "admin");
+const crmModule = modules.find((m) => m.id === "crm")!;
+const otherModules = modules.filter(
+  (m) => m.id !== "product" && m.id !== "admin" && m.id !== "crm"
+);
 
 export const router = createBrowserRouter([
   {
@@ -89,8 +103,22 @@ export const router = createBrowserRouter([
         ),
       },
 
+      // CRM module — federated remote, mounted whole, same pattern as Administration
+      // above. The trailing "/*" hands every sub-path (clients, sales-reps, ...) to
+      // the remote's own <Routes> instead of declaring them here.
+      {
+        path: "crm/*",
+        element: (
+          <RoleGate roles={crmModule.roles} fallback={<Forbidden />}>
+            <Suspense fallback={<Loading />}>
+              <CrmRemoteMount />
+            </Suspense>
+          </RoleGate>
+        ),
+      },
+
       // All other modules remain flat — Component is guaranteed here since
-      // otherModules excludes the two ids (product, admin) that omit it.
+      // otherModules excludes the three ids (product, admin, crm) that omit it.
       ...otherModules.map((m) => {
         const Component = m.Component!;
         return {

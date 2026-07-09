@@ -138,6 +138,23 @@ public class KeyCloakUserAccessor(HttpClient http, KeyCloakAdminTokenProvider to
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task RemoveRealmRoleAsync(
+        string realmSlug, string userId, KeyCloakRoleInfo role, CancellationToken ct = default)
+    {
+        var adminToken = await tokenProvider.GetAdminTokenAsync(http, ct);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/admin/realms/{Uri.EscapeDataString(realmSlug)}/users/{Uri.EscapeDataString(userId)}/role-mappings/realm")
+        {
+            Content = JsonContent.Create(new[] { new RoleResponse(role.Id, role.Name, role.Description) })
+        };
+        request.Headers.Authorization = new("Bearer", adminToken);
+
+        using var response = await http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<KeyCloakRoleInfo>> GetUserRealmRolesAsync(
         string realmSlug, string userId, CancellationToken ct = default)
     {
@@ -153,6 +170,30 @@ public class KeyCloakUserAccessor(HttpClient http, KeyCloakAdminTokenProvider to
 
         var json = await response.Content.ReadFromJsonAsync<List<RoleResponse>>(ct) ?? [];
         return json.Select(ToInfo).ToList();
+    }
+
+    public async Task UpdateUserAsync(
+        string realmSlug, string userId, UpdateKeyCloakUserRequest request, CancellationToken ct = default)
+    {
+        var adminToken = await tokenProvider.GetAdminTokenAsync(http, ct);
+
+        var payload = new UpdateUserPayload(
+            request.Username,
+            request.Email,
+            request.FirstName,
+            request.LastName,
+            request.Enabled);
+
+        using var httpRequest = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/admin/realms/{Uri.EscapeDataString(realmSlug)}/users/{Uri.EscapeDataString(userId)}")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        httpRequest.Headers.Authorization = new("Bearer", adminToken);
+
+        using var response = await http.SendAsync(httpRequest, ct);
+        response.EnsureSuccessStatusCode();
     }
 
     private static KeyCloakRoleInfo ToInfo(RoleResponse json) => new()
@@ -176,6 +217,13 @@ public class KeyCloakUserAccessor(HttpClient http, KeyCloakAdminTokenProvider to
         [property: JsonPropertyName("type")] string Type,
         [property: JsonPropertyName("value")] string Value,
         [property: JsonPropertyName("temporary")] bool Temporary);
+
+    private record UpdateUserPayload(
+        [property: JsonPropertyName("username")] string Username,
+        [property: JsonPropertyName("email")] string Email,
+        [property: JsonPropertyName("firstName")] string? FirstName,
+        [property: JsonPropertyName("lastName")] string? LastName,
+        [property: JsonPropertyName("enabled")] bool Enabled);
 
     private record RoleResponse(
         [property: JsonPropertyName("id")] string Id,

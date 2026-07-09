@@ -15,5 +15,6 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "rspack.config.ts"]
+  "include": ["src", "rspack.config.ts"],
+  "exclude": ["src/test", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }

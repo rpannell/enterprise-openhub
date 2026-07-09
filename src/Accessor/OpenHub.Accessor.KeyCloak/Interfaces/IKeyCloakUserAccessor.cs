@@ -29,6 +29,14 @@ public interface IKeyCloakUserAccessor
     Task AssignRealmRoleAsync(
         string realmSlug, string userId, KeyCloakRoleInfo role, CancellationToken ct = default);
 
+    /// <summary>Removes a realm role previously assigned to a user. No-op-safe on Keycloak's side if the user didn't have it.</summary>
+    Task RemoveRealmRoleAsync(
+        string realmSlug, string userId, KeyCloakRoleInfo role, CancellationToken ct = default);
+
     Task<IReadOnlyList<KeyCloakRoleInfo>> GetUserRealmRolesAsync(
         string realmSlug, string userId, CancellationToken ct = default);
+
+    /// <summary>Updates a user's profile fields and enabled status in place.</summary>
+    Task UpdateUserAsync(
+        string realmSlug, string userId, UpdateKeyCloakUserRequest request, CancellationToken ct = default);
 }

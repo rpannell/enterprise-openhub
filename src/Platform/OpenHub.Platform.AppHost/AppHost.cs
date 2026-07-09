@@ -12,11 +12,24 @@ builder.Configuration.AddUserSecrets<Program>();
 var postgresPassword = builder.AddParameter("postgres-password", value: "Dev_P@ssw0rd1!", secret: true);
 
 var postgres =
-    builder.AddPostgres("postgres", password: postgresPassword)
-           .WithDataVolume();
+    builder.AddPostgres("postgres", password: postgresPassword, port: 5532)
+           .WithDataVolume()
+           // Default max_connections (100) is shared across every service that talks to this
+           // instance (API, ReindexJob, ElasticProcessor, IdentityEventProcessor, Flyway, ad-hoc
+           // tools like the seed tool) — raising the reindex job's concurrency knobs eats into
+           // that same shared budget. This is a Postgres server-side setting, not something a
+           // client connection string can raise (unlike Npgsql's own "Maximum Pool Size", which
+           // only caps how many connections *one* client opens, not the server's total ceiling).
+           .WithArgs("-c", "max_connections=300");
 
 // Product catalog database — Flyway manages its schema
 var catalogDb = postgres.AddDatabase("Catalog");
+
+// CRM database (clients) — Flyway manages its schema
+var crmDb = postgres.AddDatabase("Crm");
+
+// Sales org database (sales people, roles, org units, assignments) — Flyway manages its schema
+var salesOrgDb = postgres.AddDatabase("SalesOrg");
 
 var rabbitUser = builder.AddParameter("rabbitmq-username", value: "appuser");
 var rabbitPass = builder.AddParameter("rabbitmq-password", value: "MyDevPassword123!", secret: true);
@@ -76,7 +89,7 @@ var consulSeed = builder.AddContainer("consul-seed", "hashicorp/consul")
     .WithEntrypoint("/bin/sh")
     .WithArgs("/seed/seed.sh")
     .WithBindMount(consulSeedPath, "/seed", isReadOnly: true)
-    .WithEnvironment("CONSUL_HTTP_ADDR", consul.GetEndpoint("http"))
+    .WithEnvironment("CONSUL_HTTP_ADDR", "http://consul:8500")
     .WaitFor(consul);
 
 var vaultToken = builder.AddParameter("vault-token", value: "dev-only-token", secret: true);
@@ -122,7 +135,7 @@ var vaultSeed = builder.AddContainer("vault-seed", "hashicorp/vault")
     .WithEntrypoint("/bin/sh")
     .WithArgs("/seed/seed.sh")
     .WithBindMount(vaultSeedPath, "/seed", isReadOnly: true)
-    .WithEnvironment("VAULT_ADDR", vault.GetEndpoint("http"))
+    .WithEnvironment("VAULT_ADDR", "http://vault:8200")
     .WithEnvironment("VAULT_TOKEN", vaultToken)
     .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword)
     .WithEnvironment("RABBITMQ_PASSWORD", rabbitPass)
@@ -147,6 +160,45 @@ var flyway = builder.AddContainer("flyway-catalog", "flyway/flyway", "latest")
     .WithEnvironment("FLYWAY_PLACEHOLDERS_APP_USER_PASSWORD", catalogAppUserPassword)
     .WithArgs("repair", "migrate")
     .WaitFor(catalogDb);
+
+// Non-superuser role CRM.Api actually connects as (see V1_4__create_app_role.sql) — same
+// rationale as catalogAppUserPassword above: Postgres superusers bypass Row Level Security.
+var crmAppUserPassword = builder.AddParameter("crm-app-user-password", value: "Dev_AppUser_P@ss1!", secret: true);
+
+// Flyway runs schema migrations before the CRM API starts
+var flywayCrmPath = Path.Combine(builder.AppHostDirectory, "..", "..", "Database", "CRM");
+var flywayCrm = builder.AddContainer("flyway-crm", "flyway/flyway", "latest")
+    .WithBindMount(flywayCrmPath, "/flyway/sql", isReadOnly: true)
+    .WithEnvironment("FLYWAY_URL", "jdbc:postgresql://postgres:5432/Crm")
+    .WithEnvironment("FLYWAY_USER", "postgres")
+    .WithEnvironment("FLYWAY_PASSWORD", postgresPassword)
+    .WithEnvironment("FLYWAY_SCHEMAS", "crm")
+    .WithEnvironment("FLYWAY_LOCATIONS", "filesystem:/flyway/sql")
+    .WithEnvironment("FLYWAY_CONNECT_RETRIES", "10")
+    .WithEnvironment("FLYWAY_CONNECT_RETRIES_INTERVAL", "3")
+    .WithEnvironment("FLYWAY_PLACEHOLDERS_APP_USER_PASSWORD", crmAppUserPassword)
+    .WithArgs("repair", "migrate")
+    .WaitFor(crmDb);
+
+// Non-superuser role SalesOrg.Api actually connects as (see V1_4__create_app_role.sql) — same
+// rationale as crmAppUserPassword/catalogAppUserPassword above: Postgres superusers bypass Row
+// Level Security.
+var salesOrgAppUserPassword = builder.AddParameter("salesorg-app-user-password", value: "Dev_AppUser_P@ss1!", secret: true);
+
+// Flyway runs schema migrations before the SalesOrg API starts
+var flywaySalesOrgPath = Path.Combine(builder.AppHostDirectory, "..", "..", "Database", "SalesOrg");
+var flywaySalesOrg = builder.AddContainer("flyway-salesorg", "flyway/flyway", "latest")
+    .WithBindMount(flywaySalesOrgPath, "/flyway/sql", isReadOnly: true)
+    .WithEnvironment("FLYWAY_URL", "jdbc:postgresql://postgres:5432/SalesOrg")
+    .WithEnvironment("FLYWAY_USER", "postgres")
+    .WithEnvironment("FLYWAY_PASSWORD", postgresPassword)
+    .WithEnvironment("FLYWAY_SCHEMAS", "sales_org")
+    .WithEnvironment("FLYWAY_LOCATIONS", "filesystem:/flyway/sql")
+    .WithEnvironment("FLYWAY_CONNECT_RETRIES", "10")
+    .WithEnvironment("FLYWAY_CONNECT_RETRIES_INTERVAL", "3")
+    .WithEnvironment("FLYWAY_PLACEHOLDERS_APP_USER_PASSWORD", salesOrgAppUserPassword)
+    .WithArgs("repair", "migrate")
+    .WaitFor(salesOrgDb);
 
 var frontend = builder.AddViteApp("shell", "../../Shell/OpenHub.UI")
     // Without this, Aspire assigns a random port each run (observed: 60465) instead
@@ -192,6 +244,11 @@ var frontend = builder.AddViteApp("shell", "../../Shell/OpenHub.UI")
 // for the dashboard; it just won't show a clickable URL for it.
 var adminUiRemote = builder.AddJavaScriptApp("admin-ui-remote", "../../Administration/OpenHub.Administration.UI", "dev");
 
+// Same reasoning as adminUiRemote above — genuine Module Federation remote (Rspack), not wired
+// via .WithReference()/service discovery; the shell finds it by the hardcoded dev URL in
+// vite.config.ts's federation `remotes` config.
+var crmUiRemote = builder.AddJavaScriptApp("crm-ui-remote", "../../CRM/OpenHub.CRM.UI", "dev");
+
 var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>("product-manager-api")
     .WithHttpEndpoint(port: 5200)
     .WithHttpHealthCheck("/health")
@@ -211,6 +268,54 @@ var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>(
     .WithEnvironment("Vault__Token", vaultToken)
     .WaitForCompletion(flyway)
     .WaitFor(keycloak)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
+
+var salesOrgApi = builder.AddProject<Projects.OpenHub_SalesOrg_Api>("salesorg-api")
+    .WithHttpEndpoint(port: 5500)
+    .WithHttpHealthCheck("/health")
+    .WithReference(salesOrgDb)
+    .WithReference(redis)
+    .WithReference(keycloak)
+    // Overrides the admin (postgres) connection string .WithReference(salesOrgDb) set above —
+    // must run as the non-superuser app_user role for Row Level Security to actually apply. See
+    // the comment on salesOrgAppUserPassword and V1_4__create_app_role.sql.
+    .WithEnvironment("ConnectionStrings__SalesOrg",
+        $"Host={postgres.Resource.Host};Port={postgres.Resource.Port};Username=app_user;Password={salesOrgAppUserPassword};Database=SalesOrg")
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
+    .WithEnvironment("KeyCloak__AdminUsername", "admin")
+    .WithEnvironment("KeyCloak__AdminPassword", keycloakAdminPassword)
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    .WaitForCompletion(flywaySalesOrg)
+    .WaitFor(keycloak)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
+
+var crmApi = builder.AddProject<Projects.OpenHub_CRM_Api>("crm-api")
+    .WithHttpEndpoint(port: 5400)
+    .WithHttpHealthCheck("/health")
+    .WithReference(crmDb)
+    .WithReference(redis)
+    .WithReference(keycloak)
+    // Overrides the admin (postgres) connection string .WithReference(crmDb) set above — must
+    // run as the non-superuser app_user role for Row Level Security to actually apply. See the
+    // comment on crmAppUserPassword and V1_4__create_app_role.sql.
+    .WithEnvironment("ConnectionStrings__Crm",
+        $"Host={postgres.Resource.Host};Port={postgres.Resource.Port};Username=app_user;Password={crmAppUserPassword};Database=Crm")
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
+    .WithEnvironment("KeyCloak__AdminUsername", "admin")
+    .WithEnvironment("KeyCloak__AdminPassword", keycloakAdminPassword)
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    // SalesOrg.Api is the source of truth for sales people — CRM's ISalesOrgApiAccessor resolves
+    // it via Aspire service discovery (logical name "salesorg-api").
+    .WithReference(salesOrgApi)
+    .WaitForCompletion(flywayCrm)
+    .WaitFor(keycloak)
+    .WaitFor(salesOrgApi)
     .WaitForCompletion(consulSeed)
     .WaitForCompletion(vaultSeed);
 
@@ -257,6 +362,19 @@ var productManagerIdentityEventProcessor = builder.AddProject<Projects.OpenHub_P
     .WaitFor(rabbitmq)
     .WaitFor(keycloak)
     .WaitFor(productManagerApi)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
+
+// Consumes client.changed off RabbitMQ — a scaffold today (logs receipt only), ready to grow
+// real sync logic once there's a downstream target for client data.
+var crmEventProcessor = builder.AddProject<Projects.OpenHub_CRM_EventProcessor>("crm-event-processor")
+    .WithReference(crmApi)
+    .WithReference(rabbitmq)
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    .WaitFor(rabbitmq)
+    .WaitFor(crmApi)
     .WaitForCompletion(consulSeed)
     .WaitForCompletion(vaultSeed);
 

@@ -219,6 +219,16 @@ dev mode runs without the full Aspire stack.
 
 In Aspire, these env vars are injected automatically via `WithEnvironment(...)` in `AppHost.cs`.
 
+## Documenting new configuration
+
+Any time a new `appsettings`/environment-variable key is introduced (or a default changes), add
+or update a "Configuration reference" table in that project's README in the same change — key
+name, what it does, and its default. This is how anyone doing a deploy knows what needs to be set;
+undocumented config is what turns into a production incident nobody can explain. Applies to
+project-local settings (e.g. `ReindexJob:PageConcurrency`) and shared library settings read via
+`IConfiguration` in an `Accessor`/`ServiceDefaults` project (e.g. `ElasticIndex:NumberOfShards`) —
+document it in whichever README covers the code that reads it.
+
 ## HybridCache Pattern
 
 `HybridCache` (L1 in-process + L2 Redis) is the only caching abstraction. No `IMemoryCache` or

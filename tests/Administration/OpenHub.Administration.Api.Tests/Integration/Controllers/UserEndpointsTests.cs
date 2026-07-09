@@ -80,7 +80,6 @@ public class UserEndpointsTests : IClassFixture<AdministrationApiFactory>
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/organizations/client-b/users", new CreateUserRequest
         {
-            Username = "newuser",
             Email = "newuser@client-b.com",
         });
 
@@ -92,12 +91,11 @@ public class UserEndpointsTests : IClassFixture<AdministrationApiFactory>
     {
         AuthenticateAsTenantAdmin("client-a");
         _factory.UserManagerMock.CreateUserAsync(Arg.Any<AdminCallerContext>(), "client-a", Arg.Any<CreateUserDto>(), Arg.Any<CancellationToken>())
-            .Returns(new UserDto { Id = "user-1", Username = "newuser", Enabled = true });
+            .Returns(new UserDto { Id = "user-1", Username = "newuser@client-a.com", Enabled = true, TemporaryPassword = "Tmp-abc123!" });
 
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/organizations/client-a/users", new CreateUserRequest
         {
-            Username = "newuser",
             Email = "newuser@client-a.com",
         });
 
@@ -105,15 +103,80 @@ public class UserEndpointsTests : IClassFixture<AdministrationApiFactory>
     }
 
     [Fact]
-    public async Task CreateUser_EmptyUsername_ReturnsValidationProblem()
+    public async Task CreateUser_ReturnsTemporaryPasswordInResponseBody()
+    {
+        AuthenticateAsTenantAdmin("client-a");
+        _factory.UserManagerMock.CreateUserAsync(Arg.Any<AdminCallerContext>(), "client-a", Arg.Any<CreateUserDto>(), Arg.Any<CancellationToken>())
+            .Returns(new UserDto { Id = "user-1", Username = "newuser@client-a.com", Enabled = true, TemporaryPassword = "Tmp-abc123!" });
+
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/v1/organizations/client-a/users", new CreateUserRequest
+        {
+            Email = "newuser@client-a.com",
+        });
+
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("Tmp-abc123!");
+    }
+
+    [Fact]
+    public async Task CreateUser_EmptyEmail_ReturnsValidationProblem()
     {
         AuthenticateAsTenantAdmin("client-a");
 
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/organizations/client-a/users", new CreateUserRequest
         {
-            Username = "",
-            Email = "newuser@client-a.com",
+            Email = "",
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateUser_AsTenantAdmin_OwnOrg_Returns200()
+    {
+        AuthenticateAsTenantAdmin("client-a");
+        _factory.UserManagerMock.UpdateUserAsync(Arg.Any<AdminCallerContext>(), "client-a", "user-1", Arg.Any<UpdateUserDto>(), Arg.Any<CancellationToken>())
+            .Returns(new UserDto { Id = "user-1", Username = "updated@client-a.com", Enabled = true });
+
+        var client = _factory.CreateClient();
+        var response = await client.PutAsJsonAsync("/api/v1/organizations/client-a/users/user-1", new UpdateUserRequest
+        {
+            Email = "updated@client-a.com",
+            Enabled = true,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task UpdateUser_AsTenantAdmin_DifferentOrgInRoute_Returns403()
+    {
+        AuthenticateAsTenantAdmin("client-a");
+        _factory.UserManagerMock.UpdateUserAsync(Arg.Any<AdminCallerContext>(), "client-b", "user-1", Arg.Any<UpdateUserDto>(), Arg.Any<CancellationToken>())
+            .Returns<UserDto>(_ => throw new ForbiddenOperationException("tenant-admin cannot manage organization 'client-b'."));
+
+        var client = _factory.CreateClient();
+        var response = await client.PutAsJsonAsync("/api/v1/organizations/client-b/users/user-1", new UpdateUserRequest
+        {
+            Email = "updated@client-b.com",
+            Enabled = true,
+        });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task UpdateUser_InvalidEmail_ReturnsValidationProblem()
+    {
+        AuthenticateAsTenantAdmin("client-a");
+
+        var client = _factory.CreateClient();
+        var response = await client.PutAsJsonAsync("/api/v1/organizations/client-a/users/user-1", new UpdateUserRequest
+        {
+            Email = "not-an-email",
+            Enabled = true,
         });
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -179,6 +242,32 @@ public class UserEndpointsTests : IClassFixture<AdministrationApiFactory>
         {
             RoleName = "tenant-admin",
         });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task RemoveRole_TenantAdminRemovingTenantAdminRole_Returns403()
+    {
+        AuthenticateAsTenantAdmin("client-a");
+        _factory.UserManagerMock.RemoveRoleAsync(Arg.Any<AdminCallerContext>(), "client-a", "user-1", "tenant-admin", Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new ForbiddenOperationException("Only a platform-admin can grant the 'tenant-admin' role.")));
+
+        var client = _factory.CreateClient();
+        var response = await client.DeleteAsync("/api/v1/organizations/client-a/users/user-1/roles/tenant-admin");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RemoveRole_TenantAdminRemovingOrdinaryRole_Returns204()
+    {
+        AuthenticateAsTenantAdmin("client-a");
+        _factory.UserManagerMock.RemoveRoleAsync(Arg.Any<AdminCallerContext>(), "client-a", "user-1", "product-manager", Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var client = _factory.CreateClient();
+        var response = await client.DeleteAsync("/api/v1/organizations/client-a/users/user-1/roles/product-manager");
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }

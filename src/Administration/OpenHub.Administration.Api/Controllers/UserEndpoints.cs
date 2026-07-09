@@ -83,6 +83,34 @@ public static class UserEndpoints
         .ProducesValidationProblem()
         .AddEndpointFilter<ValidationFilter<CreateUserRequest>>();
 
+        group.MapPut("/users/{userId}", async (
+            string realmSlug,
+            string userId,
+            UpdateUserRequest request,
+            HttpContext http,
+            IUserManager manager,
+            UserMapper mapper,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var dto = await manager.UpdateUserAsync(CallerFrom(http), realmSlug, userId, mapper.ToDto(request), ct);
+                return Results.Ok(mapper.ToResponse(dto));
+            }
+            catch (ForbiddenOperationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status403Forbidden);
+            }
+        })
+        .WithName("UpdateOrganizationUser")
+        .WithSummary("Update a user in an organization")
+        .WithDescription("Updates a user's profile fields and enabled status. Username is always kept in sync with email — " +
+            "there is no separate username in this app. A tenant-admin may only update users in their own organization.")
+        .Produces<UserResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
+        .ProducesValidationProblem()
+        .AddEndpointFilter<ValidationFilter<UpdateUserRequest>>();
+
         group.MapGet("/roles", async (
             string realmSlug,
             HttpContext http,
@@ -137,6 +165,36 @@ public static class UserEndpoints
         .ProducesProblem(StatusCodes.Status403Forbidden)
         .ProducesValidationProblem()
         .AddEndpointFilter<ValidationFilter<AssignRoleRequest>>();
+
+        group.MapDelete("/users/{userId}/roles/{roleName}", async (
+            string realmSlug,
+            string userId,
+            string roleName,
+            HttpContext http,
+            IUserManager manager,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                await manager.RemoveRoleAsync(CallerFrom(http), realmSlug, userId, roleName, ct);
+                return Results.NoContent();
+            }
+            catch (ForbiddenOperationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
+            }
+        })
+        .WithName("RemoveOrganizationUserRole")
+        .WithSummary("Remove a realm role from a user")
+        .WithDescription("Removes a realm role from a user in the organization. Rejected with 403 if the caller is a tenant-admin " +
+            "attempting to remove \"tenant-admin\" or \"platform-admin\" — only a platform-admin may remove those.")
+        .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status403Forbidden);
 
         return app;
     }

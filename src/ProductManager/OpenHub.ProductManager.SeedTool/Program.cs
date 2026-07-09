@@ -782,7 +782,11 @@ internal static class ProductBulkWriter
             rows[i] = new GeneratedProduct(
                 productId, categoryId, NameVariety.RandomUpc(), retailPrice, wholesalePrice, color, material, warrantyMonths);
 
-            var sku = $"{template.CategoryCode}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+            // 16 hex chars (64 bits), not 8 — several templates share a CategoryCode (e.g. 13
+            // templates all use "COMPTB"), so a popular code alone can draw 50k+ rows out of a
+            // 500k run. At 8 hex chars (32 bits) that's a >50% chance of a birthday collision on
+            // uq_products_tenant_sku; 16 hex chars makes it negligible at this scale.
+            var sku = $"{template.CategoryCode}-{Guid.NewGuid().ToString("N")[..16].ToUpperInvariant()}";
             var hyphenIndex = brand.ManufacturerCode.IndexOf('-');
             var mpnPrefix = (hyphenIndex < 0 ? brand.ManufacturerCode : brand.ManufacturerCode[..hyphenIndex]).ToUpperInvariant();
             var mpn = $"{mpnPrefix}-{Random.Shared.Next(10_000, 99_999)}";
