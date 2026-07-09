@@ -46,6 +46,13 @@ export default defineConfig({
     // hanging in front of this dev server; the port number itself was never the
     // problem, but 5175 stuck as the port once the endpoint declaration came out.
     port: 5175,
+    // AdminApp mounts its own <BrowserRouter basename="/admin"> (see AdminApp.tsx),
+    // which renders nothing at all — not even the nav outside <Routes> — for any
+    // URL that doesn't start with "/admin". Without this fallback, a direct
+    // navigation or a plain page refresh at /admin/organizations 404s outright
+    // instead of re-serving index.html and letting the client-side router take
+    // over, since there's no such file on disk.
+    historyApiFallback: true,
     // Allows *.localhost dev requests (client-a.localhost, admin.localhost, ...) — same
     // reason as the shell's identical `allowedHosts: [".localhost"]` in vite.config.ts.
     // This is a *different* check than the CORS `headers` below: rspack's dev-server has
@@ -79,7 +86,12 @@ export default defineConfig({
     // see src/bootstrap.tsx and src/dev/fakeHostAuth.ts.
     proxy: [
       {
-        context: ["/adm"],
+        // "/adm/api" (not the bare "/adm" prefix) — a plain "/adm" context
+        // also prefix-matches the "/admin" SPA route AdminApp mounts itself
+        // at, hijacking every client-side navigation to /admin* into a proxied
+        // API call (rewritten to a nonsense "/in*" path against port 5300)
+        // before historyApiFallback ever gets a chance to serve index.html.
+        context: ["/adm/api"],
         target: "http://localhost:5300",
         pathRewrite: { "^/adm": "" },
       },

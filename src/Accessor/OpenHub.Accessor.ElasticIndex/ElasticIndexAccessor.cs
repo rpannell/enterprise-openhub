@@ -150,9 +150,23 @@ public class ElasticIndexAccessor<TDocument>(
         // the same name within the same second.
         var versionedIndexName = $"{IndexName}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfffffff}";
 
+        // A single primary shard is written by exactly one node no matter how many nodes the
+        // cluster has — a multi-node production cluster only actually parallelizes bulk
+        // indexing for a tenant's reindex if the versioned index has more than one shard.
+        // Configurable per environment: a small single-node dev cluster has no use for extra
+        // shards (they'd just sit unassigned or add overhead), but a clustered deployment
+        // should set this to (at least) its node count.
+        var numberOfShards = int.TryParse(configuration["ElasticIndex:NumberOfShards"], out var shards) ? shards : 1;
+        var numberOfReplicas = int.TryParse(configuration["ElasticIndex:NumberOfReplicas"], out var replicas) ? replicas : 1;
+
         // Same tenant_id-only explicit mapping as EnsureIndexAsync — see the type-level
         // remarks on why literal-string field mapping is required for a generic TDocument.
         var response = await client.Indices.CreateAsync(versionedIndexName, c => c
+            .Settings(s => s.OtherSettings(new Dictionary<string, object>
+            {
+                ["index.number_of_shards"] = numberOfShards,
+                ["index.number_of_replicas"] = numberOfReplicas
+            }))
             .Mappings(m => m.Properties(p => p.Keyword("tenant_id"))),
             ct);
 

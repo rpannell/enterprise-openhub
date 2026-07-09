@@ -34,28 +34,36 @@ public class UserManager(
     {
         EnsureCanAccessRealm(caller, realmSlug);
 
+        // Username always equals email in this app — Keycloak itself allows them to
+        // differ, but there's no product reason for a separate username to exist.
+        var temporaryPassword = GenerateTemporaryPassword();
         var userId = await userAccessor.CreateUserAsync(realmSlug, new CreateKeyCloakUserRequest
         {
-            Username = request.Username,
+            Username = request.Email,
             Email = request.Email,
             FirstName = request.FirstName,
             LastName = request.LastName,
-            TemporaryPassword = GenerateTemporaryPassword()
+            TemporaryPassword = temporaryPassword
         }, ct);
 
         await TryAddToOrganizationAsync(realmSlug, userId, ct);
 
         var assignedRoles = new List<string>();
-        if (!string.IsNullOrWhiteSpace(request.InitialRole))
+        foreach (var roleName in request.InitialRoles)
         {
-            await AssignRoleAsync(caller, realmSlug, userId, request.InitialRole, ct);
-            assignedRoles.Add(request.InitialRole);
+            await AssignRoleAsync(caller, realmSlug, userId, roleName, ct);
+            assignedRoles.Add(roleName);
         }
 
         var created = await userAccessor.GetUserByIdAsync(realmSlug, userId, ct)
             ?? throw new InvalidOperationException("User was created but could not be re-fetched from Keycloak.");
 
-        return mapper.ToDto(created, assignedRoles);
+        var dto = mapper.ToDto(created, assignedRoles);
+        // Not stored anywhere and never returned again — see UserDto.TemporaryPassword
+        // and UserResponse.TemporaryPassword: this is the one and only time it's surfaced,
+        // since there's no SMTP integration yet to email it to the new user instead.
+        dto.TemporaryPassword = temporaryPassword;
+        return dto;
     }
 
     public async Task<IReadOnlyList<RoleDto>> ListAssignableRolesAsync(AdminCallerContext caller, string realmSlug, CancellationToken ct = default)
@@ -80,6 +88,43 @@ public class UserManager(
             ?? throw new InvalidOperationException($"Role '{roleName}' does not exist in realm '{realmSlug}'.");
 
         await userAccessor.AssignRealmRoleAsync(realmSlug, userId, role, ct);
+    }
+
+    public async Task RemoveRoleAsync(AdminCallerContext caller, string realmSlug, string userId, string roleName, CancellationToken ct = default)
+    {
+        EnsureCanAccessRealm(caller, realmSlug);
+
+        // Same escalation guard as assignment, applied in reverse — a tenant-admin
+        // shouldn't be able to demote a tenant-admin/platform-admin any more than they
+        // can promote one.
+        var decision = roleAssignmentEngine.Evaluate(roleName, caller.IsPlatformAdmin);
+        if (!decision.Allowed)
+            throw new ForbiddenOperationException(decision.DenyReason!);
+
+        var role = await userAccessor.GetRealmRoleAsync(realmSlug, roleName, ct)
+            ?? throw new InvalidOperationException($"Role '{roleName}' does not exist in realm '{realmSlug}'.");
+
+        await userAccessor.RemoveRealmRoleAsync(realmSlug, userId, role, ct);
+    }
+
+    public async Task<UserDto> UpdateUserAsync(AdminCallerContext caller, string realmSlug, string userId, UpdateUserDto request, CancellationToken ct = default)
+    {
+        EnsureCanAccessRealm(caller, realmSlug);
+
+        await userAccessor.UpdateUserAsync(realmSlug, userId, new UpdateKeyCloakUserRequest
+        {
+            Username = request.Email,
+            Email = request.Email,
+            FirstName = request.FirstName,
+            LastName = request.LastName,
+            Enabled = request.Enabled
+        }, ct);
+
+        var updated = await userAccessor.GetUserByIdAsync(realmSlug, userId, ct)
+            ?? throw new InvalidOperationException($"User '{userId}' was updated but could not be re-fetched from Keycloak.");
+        var roles = await userAccessor.GetUserRealmRolesAsync(realmSlug, userId, ct);
+
+        return mapper.ToDto(updated, roles.Select(r => r.Name).ToList());
     }
 
     private async Task TryAddToOrganizationAsync(string realmSlug, string userId, CancellationToken ct)

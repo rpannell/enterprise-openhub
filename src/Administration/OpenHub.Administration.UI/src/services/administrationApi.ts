@@ -2,7 +2,9 @@ import type {
   Organization,
   CreateOrganizationRequest,
   OrgUser,
+  CreatedUser,
   CreateUserRequest,
+  UpdateUserRequest,
   Role,
 } from "../types";
 
@@ -53,9 +55,15 @@ export function createAdministrationApi(getToken: () => Promise<string>) {
     getOrganizationUsers: (realmSlug: string): Promise<OrgUser[]> =>
       apiFetch(`/api/v1/organizations/${realmSlug}/users`).then((r) => r.json()),
 
-    createOrganizationUser: (realmSlug: string, req: CreateUserRequest): Promise<OrgUser> =>
+    createOrganizationUser: (realmSlug: string, req: CreateUserRequest): Promise<CreatedUser> =>
       apiFetch(`/api/v1/organizations/${realmSlug}/users`, {
         method: "POST",
+        body: JSON.stringify(req),
+      }).then((r) => r.json()),
+
+    updateOrganizationUser: (realmSlug: string, userId: string, req: UpdateUserRequest): Promise<OrgUser> =>
+      apiFetch(`/api/v1/organizations/${realmSlug}/users/${userId}`, {
+        method: "PUT",
         body: JSON.stringify(req),
       }).then((r) => r.json()),
 
@@ -66,6 +74,11 @@ export function createAdministrationApi(getToken: () => Promise<string>) {
       apiFetch(`/api/v1/organizations/${realmSlug}/users/${userId}/roles`, {
         method: "POST",
         body: JSON.stringify({ roleName }),
+      }).then(() => undefined),
+
+    removeRole: (realmSlug: string, userId: string, roleName: string): Promise<void> =>
+      apiFetch(`/api/v1/organizations/${realmSlug}/users/${userId}/roles/${roleName}`, {
+        method: "DELETE",
       }).then(() => undefined),
   };
 }

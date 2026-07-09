@@ -24,12 +24,23 @@ export interface OrgUser {
   roles: string[];
 }
 
+/** Returned only from createOrganizationUser — see CreateUserModal's post-create screen. */
+export interface CreatedUser extends OrgUser {
+  temporaryPassword?: string;
+}
+
 export interface CreateUserRequest {
-  username: string;
   email: string;
   firstName?: string;
   lastName?: string;
-  initialRole?: string;
+  initialRoles?: string[];
+}
+
+export interface UpdateUserRequest {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  enabled: boolean;
 }
 
 export interface Role {

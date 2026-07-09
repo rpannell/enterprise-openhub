@@ -179,4 +179,42 @@ public class KeyCloakUserAccessorTests
         result.Count.ShouldBe(1);
         result[0].Name.ShouldBe("user");
     }
+
+    [Fact]
+    public async Task RemoveRealmRoleAsync_SendsDeleteWithRoleArrayBody()
+    {
+        var handler = HandlerWithValidToken()
+            .When(HttpMethod.Delete, "role-mappings", _ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var sut = CreateSut(handler);
+
+        await sut.RemoveRealmRoleAsync("client-a", "user-1", new KeyCloakRoleInfo { Id = "role-1", Name = "product-manager" });
+
+        var removeRequest = handler.Requests.Single(r => r.RequestUri!.AbsolutePath.Contains("role-mappings", StringComparison.Ordinal));
+        removeRequest.Method.ShouldBe(HttpMethod.Delete);
+        removeRequest.Body.ShouldContain("role-1");
+        removeRequest.Body.ShouldContain("product-manager");
+    }
+
+    [Fact]
+    public async Task UpdateUserAsync_SendsPutWithUsernameSetToEmail()
+    {
+        var handler = HandlerWithValidToken()
+            .When(HttpMethod.Put, UsersPath, _ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var sut = CreateSut(handler);
+
+        await sut.UpdateUserAsync("client-a", "user-1", new UpdateKeyCloakUserRequest
+        {
+            Username = "jdoe@client-a.com",
+            Email = "jdoe@client-a.com",
+            FirstName = "Jane",
+            LastName = "Doe",
+            Enabled = false,
+        });
+
+        var updateRequest = handler.Requests.Single(r => r.Method == HttpMethod.Put);
+        updateRequest.RequestUri!.AbsolutePath.ShouldEndWith("/users/user-1");
+        updateRequest.Body.ShouldContain("\"username\":\"jdoe@client-a.com\"");
+        updateRequest.Body.ShouldContain("\"email\":\"jdoe@client-a.com\"");
+        updateRequest.Body.ShouldContain("\"enabled\":false");
+    }
 }

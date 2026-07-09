@@ -69,10 +69,12 @@ export const modules: ModuleDef[] = [
   {
     id: "crm",
     name: "CRM",
-    description: "Accounts, contacts, and customer history",
+    description: "Clients and the sales rep hierarchy responsible for them",
     path: "/crm",
     roles: ["crm-user"],
     Icon: Users,
-    Component: lazy(() => import("../modules/crm/CrmApp")),
+    // No Component here — this module is a Module Federation remote
+    // (src/CRM/OpenHub.CRM.UI), loaded via a federated dynamic import in
+    // router.tsx, not a local lazy() import like the others.
   },
 ];

@@ -11,6 +11,8 @@ public partial class UserMapper
 {
     public partial CreateUserDto ToDto(CreateUserRequest request);
 
+    public partial UpdateUserDto ToDto(UpdateUserRequest request);
+
     public partial UserResponse ToResponse(UserDto dto);
 
     // Hand-written (not Mapperly-generated): roles come from a separate role-mappings

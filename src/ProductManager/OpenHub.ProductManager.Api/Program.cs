@@ -1,6 +1,8 @@
 using Asp.Versioning;
 using FluentValidation;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using OpenHub.Accessor.KeyCloak.Extensions;
+using OpenHub.ProductManager.Api;
 using OpenHub.ProductManager.Api.Accessors.Data;
 using OpenHub.ProductManager.Api.Accessors.Setup;
 using OpenHub.ProductManager.Api.Controllers;
@@ -29,7 +31,11 @@ builder.AddVaultSecrets(
 builder.AddNpgsqlDbContext<CatalogDbContext>("Catalog");
 
 // ── Caching (HybridCache: L1 in-process + L2 Redis) ─────────────────────────
+// See ApiConst.RedisInstanceName for why this must be set — product-manager-api and crm-api
+// share the same Aspire Redis resource, and without a unique per-service prefix their
+// identically-shaped cache keys (e.g. "tenant:id:{tenantId}") collide.
 builder.AddRedisDistributedCache("Redis");
+builder.Services.Configure<RedisCacheOptions>(options => options.InstanceName = ApiConst.RedisInstanceName);
 builder.Services.AddHybridCache();
 
 // ── Messaging (RabbitMQ durable fanout exchange for product change events) ──

@@ -84,6 +84,13 @@ await indexAccessor.DeleteIndexIfUnreferencedAsync(previousIndexName, ct); // on
 
 Because per-document writes always go through the tenant's alias (see above), the trickle-feed consumer needs no awareness of which index is "current" — it keeps working correctly before, during, and after a tenant's cutover.
 
+## Configuration reference
+
+| Key | Description |
+|---|---|
+| `ElasticIndex:NumberOfShards` | Primary shard count for each versioned index `CreateVersionedIndexAsync` creates. Default 1. A single shard is written by exactly one node regardless of cluster size — a multi-node production cluster only actually parallelizes a full reindex's bulk writes if this is raised to (at least) the node count. |
+| `ElasticIndex:NumberOfReplicas` | Replica count for each versioned index. Default 1. |
+
 `AddElasticIndexAccessor<TDocument>()` registers, per closed generic type:
 - `IElasticIndexAccessor<TDocument>` (singleton)
 - `IVaultSecretAccessor` (singleton, shared across every `TDocument` registered in the same service — safe to call this method more than once per process)

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OpenHub.CRM.EventProcessor</AssemblyName>
+    <RootNamespace>OpenHub.CRM.EventProcessor</RootNamespace>
+    <UserSecretsId>dotnet-OpenHub.CRM.EventProcessor-8f4b6d2a-1c9e-4a7f-b3d5-6e2a9c1f4b8d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
+    <PackageReference Include="Rebus" Version="8.9.2" />
+    <PackageReference Include="Rebus.RabbitMq" Version="10.1.1" />
+    <PackageReference Include="Rebus.ServiceProvider" Version="10.7.2" />
+    <PackageReference Include="Rebus.Microsoft.Extensions.Logging" Version="5.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Platform\OpenHub.Platform.ServiceDefaults\OpenHub.Platform.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\OpenHub.CRM.Contracts\OpenHub.CRM.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "../components/DataTable";
 import { useAdminRuntime } from "../context/AdminRuntimeContext";
 import type { Organization, OrgUser } from "../types";
 import { CreateUserModal } from "./CreateUserModal";
+import { EditUserModal } from "./EditUserModal";
 
 function StatusBadge({ enabled }: { enabled: boolean }) {
   return (
@@ -33,6 +34,7 @@ export default function UserList() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingUser, setEditingUser] = useState<OrgUser | null>(null);
 
   useEffect(() => {
     if (!isPlatformAdmin) return;
@@ -82,6 +84,20 @@ export default function UserList() {
       accessorKey: "enabled",
       header: "Status",
       cell: ({ getValue }) => <StatusBadge enabled={getValue()} />,
+    },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <button
+          onClick={() => setEditingUser(row.original)}
+          aria-label={`Edit ${row.original.username}`}
+          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+        >
+          <Pencil size={15} />
+        </button>
+      ),
     },
   ];
 
@@ -134,6 +150,18 @@ export default function UserList() {
           onCancel={() => setShowCreate(false)}
           onCreated={() => {
             setShowCreate(false);
+            reload();
+          }}
+        />
+      )}
+
+      {editingUser && realmSlug && (
+        <EditUserModal
+          realmSlug={realmSlug}
+          user={editingUser}
+          onCancel={() => setEditingUser(null)}
+          onSaved={() => {
+            setEditingUser(null);
             reload();
           }}
         />

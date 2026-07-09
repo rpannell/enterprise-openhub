@@ -22,7 +22,8 @@
       { "name": "user" },
       { "name": "tenant-admin" },
       { "name": "product-manager" },
-      { "name": "product-viewer" }
+      { "name": "product-viewer" },
+      { "name": "crm-user" }
     ]
   },
   "users": [
@@ -35,7 +36,7 @@
       "credentials": [
         { "type": "password", "value": "P@ssw0rd1", "temporary": false }
       ],
-      "realmRoles": ["user", "product-manager", "tenant-admin"]
+      "realmRoles": ["user", "product-manager", "tenant-admin", "crm-user"]
     }
   ],
   "clients": [
@@ -66,6 +67,7 @@
       "publicClient": false,
       "secret": "dev-secret",
       "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": true,
       "protocolMappers": [
         {
           "name": "tenant-id",
@@ -119,6 +121,16 @@
           "protocolMapper": "oidc-audience-mapper",
           "config": {
             "included.client.audience": "product-manager-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "crm-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "crm-api",
             "access.token.claim": "true",
             "id.token.claim": "false"
           }

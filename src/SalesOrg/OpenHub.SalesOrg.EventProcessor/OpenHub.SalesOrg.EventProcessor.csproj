@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OpenHub.SalesOrg.EventProcessor</AssemblyName>
+    <RootNamespace>OpenHub.SalesOrg.EventProcessor</RootNamespace>
+    <UserSecretsId>dotnet-OpenHub.SalesOrg.EventProcessor-3f7a1c9e-2b8d-4e6f-a1c3-9d5b7e2f8a4c</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Platform\OpenHub.Platform.ServiceDefaults\OpenHub.Platform.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\OpenHub.SalesOrg.Contracts\OpenHub.SalesOrg.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

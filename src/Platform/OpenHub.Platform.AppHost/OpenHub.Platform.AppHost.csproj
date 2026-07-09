@@ -12,10 +12,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Administration\OpenHub.Administration.Api\OpenHub.Administration.Api.csproj" />
+    <ProjectReference Include="..\..\CRM\OpenHub.CRM.Api\OpenHub.CRM.Api.csproj" />
+    <ProjectReference Include="..\..\CRM\OpenHub.CRM.EventProcessor\OpenHub.CRM.EventProcessor.csproj" />
     <ProjectReference Include="..\..\ProductManager\OpenHub.ProductManager.Api\OpenHub.ProductManager.Api.csproj" />
     <ProjectReference Include="..\..\ProductManager\OpenHub.ProductManager.ElasticProcessor\OpenHub.ProductManager.ElasticProcessor.csproj" />
     <ProjectReference Include="..\..\ProductManager\OpenHub.ProductManager.IdentityEventProcessor\OpenHub.ProductManager.IdentityEventProcessor.csproj" />
     <ProjectReference Include="..\..\ProductManager\OpenHub.ProductManager.ReindexJob\OpenHub.ProductManager.ReindexJob.csproj" />
+    <ProjectReference Include="..\..\SalesOrg\OpenHub.SalesOrg.Api\OpenHub.SalesOrg.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

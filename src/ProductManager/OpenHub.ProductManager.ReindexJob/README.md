@@ -59,11 +59,17 @@ This job needs two kinds of Keycloak tokens:
 
 | Key | Description |
 |---|---|
-| `ReindexJob:PageSize` | Rows requested per `GET /api/v1/products` page call. Default 200. |
+| `ReindexJob:PageSize` | Rows requested per `GET /api/v1/products` page call. Default 100 — must stay within `ProductListRequestValidator`'s `InclusiveBetween(1, 100)` on the API side, or every page call 400s. |
 | `ReindexJob:BatchSize` | Documents per Elasticsearch bulk request. Default 500. |
 | `ReindexJob:MaxBatchRetries` | Retries for one bulk batch before giving up on it. Default 3. |
-| `ReindexJob:TenantConcurrency` | Tenants reindexed concurrently. Default 2. |
+| `ReindexJob:TenantConcurrency` | Tenants reindexed concurrently. Default 4. |
+| `ReindexJob:PageConcurrency` | Pages fetched/indexed concurrently within a single tenant. Default 4. Safe because pages are independent (offset-based) and write into a brand-new index nothing else reads until cutover. |
 | `ReindexJob:FailureThresholdPercent` | Max share of a tenant's documents allowed to fail before that tenant's whole run fails (alias left untouched). Default 5.0. |
+
+Raising `TenantConcurrency`/`PageConcurrency` pushes more concurrent load onto Postgres (each
+page fetch on the API side holds its own transaction/connection for the request) and onto
+Elasticsearch's write thread pool — tune against actual Postgres `max_connections` headroom and
+ES node/shard capacity, not blindly.
 
 Schedule is **not** a config key here — this process always runs to completion once and
 exits. The schedule lives entirely in the Kubernetes CronJob's `schedule:` field
