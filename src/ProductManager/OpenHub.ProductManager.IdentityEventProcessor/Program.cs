@@ -8,10 +8,11 @@ using OpenHub.ProductManager.IdentityEventProcessor.Messaging.Setup;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.AddServiceDefaults();
-
+// Must run before AddServiceDefaults() so Otel:CollectorEndpoint is visible to it.
 builder.AddConsulConfiguration("platform/config", "product-manager-identity-event-processor/config");
 builder.AddVaultSecrets("platform", "product-manager-identity-event-processor");
+
+builder.AddServiceDefaults();
 
 builder.AddRedisDistributedCache("Redis");
 builder.Services.AddHybridCache();
