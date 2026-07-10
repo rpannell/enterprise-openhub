@@ -42,6 +42,11 @@ dist/
 @mf-types/
 *.tsbuildinfo
 
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+
 # Local env overrides — .env.example is committed, locals are not
 .env.local
 .env.*.local

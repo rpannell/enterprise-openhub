@@ -1,0 +1,66 @@
+name: CRM UI CI
+
+# Same per-project pattern as the .NET workflows (see productmanager-api-ci.yml) — path-filtered
+# to this remote's own directory, restore/build/test commands validated locally before adding.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/CRM/OpenHub.CRM.UI/**"
+      - ".github/workflows/crm-ui-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/CRM/OpenHub.CRM.UI/**"
+      - ".github/workflows/crm-ui-ci.yml"
+
+concurrency:
+  group: crm-ui-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/CRM/OpenHub.CRM.UI
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: npm
+          cache-dependency-path: src/CRM/OpenHub.CRM.UI/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b --noEmit
+
+      - name: Run unit tests
+        run: npm test
+
+      # Only Chromium — every Playwright project here (standard + "mobile", which uses the
+      # Chromium-based Pixel 5 emulation, not WebKit's iPhone presets) runs on it; see
+      # playwright.config.ts's comment on that choice.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # "standalone" project excluded for now — e2e/standalone.spec.ts currently tests
+      # Organizations/Users/"/admin" routes that don't exist anywhere in this remote (it was
+      # copy-pasted from Administration.UI's e2e suite and never adapted; confirmed failing,
+      # not just unmaintained). Re-add once that file is rewritten to test CRM.UI's actual
+      # Clients/Sales Hierarchy screens.
+      - name: Run Playwright e2e tests
+        run: npx playwright test --project=federated --project=mobile
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-ui-playwright-results
+          path: src/CRM/OpenHub.CRM.UI/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
