@@ -18,7 +18,7 @@ import { test, expect } from "@playwright/test";
  */
 test.describe("Module Federation boundary", () => {
   test("remoteEntry.js is servable and CORS-allows the shell's dev origin", async ({ request }) => {
-    const response = await request.get("http://localhost:5175/remoteEntry.js", {
+    const response = await request.get("http://localhost:5176/remoteEntry.js", {
       headers: { Origin: "http://localhost:5173" },
     });
 
@@ -27,7 +27,7 @@ test.describe("Module Federation boundary", () => {
   });
 
   test("remoteEntry.js CORS-allows a tenant subdomain origin (client-a.localhost:5173)", async ({ request }) => {
-    const response = await request.get("http://localhost:5175/remoteEntry.js", {
+    const response = await request.get("http://localhost:5176/remoteEntry.js", {
       headers: { Origin: "http://client-a.localhost:5173" },
     });
 
@@ -38,7 +38,7 @@ test.describe("Module Federation boundary", () => {
   test("remoteEntry.js is emitted as an ES module container (MF2 shape, not the classic var/global container)", async ({
     request,
   }) => {
-    const response = await request.get("http://localhost:5175/remoteEntry.js");
+    const response = await request.get("http://localhost:5176/remoteEntry.js");
     const body = await response.text();
 
     // A classic (pre-MF2) container assigns itself to a global var instead —

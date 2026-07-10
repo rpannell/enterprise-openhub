@@ -1,0 +1,60 @@
+name: Administration UI CI
+
+# Same per-project pattern as the .NET workflows (see productmanager-api-ci.yml) — path-filtered
+# to this remote's own directory, restore/build/test commands validated locally before adding.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/Administration/OpenHub.Administration.UI/**"
+      - ".github/workflows/administration-ui-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/Administration/OpenHub.Administration.UI/**"
+      - ".github/workflows/administration-ui-ci.yml"
+
+concurrency:
+  group: administration-ui-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/Administration/OpenHub.Administration.UI
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: npm
+          cache-dependency-path: src/Administration/OpenHub.Administration.UI/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b --noEmit
+
+      - name: Run unit tests
+        run: npm test
+
+      # Only Chromium — both Playwright projects here ("standalone" and "federated") run on
+      # "Desktop Chrome".
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright e2e tests
+        run: npx playwright test
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: administration-ui-playwright-results
+          path: src/Administration/OpenHub.Administration.UI/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
