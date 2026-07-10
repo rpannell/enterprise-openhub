@@ -35,7 +35,7 @@ public class ProductEndpointsTests : IClassFixture<ProductManagerApiFactory>
             .GetOrProvisionAsync(_tenantId, "client-a", Arg.Any<CancellationToken>())
             .Returns(new TenantDto { Id = _tenantId, Slug = "client-a", Name = "Client A", PlanTier = "standard", IsActive = true });
         _factory.TenantAccessorMock
-            .GetOrProvisionUserAsync(_tenantId, "kc-user-1", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .GetOrProvisionUserAsync(_tenantId, "client-a", "kc-user-1", Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(_userId);
     }
 

@@ -7,6 +7,6 @@ public interface ITenantAccessor
     Task<TenantDto?> GetOrProvisionAsync(Guid tenantId, string realmSlug, CancellationToken ct = default);
 
     Task<Guid?> GetOrProvisionUserAsync(
-        Guid tenantId, string uniqueId, string email, string firstName, string lastName,
+        Guid tenantId, string realmSlug, string uniqueId, string email, string firstName, string lastName,
         CancellationToken ct = default);
 }
