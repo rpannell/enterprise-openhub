@@ -1,0 +1,61 @@
+name: Administration API CI
+
+# Same per-project pattern as productmanager-api-ci.yml — see that file's comment.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/Administration/OpenHub.Administration.Api/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "tests/Administration/OpenHub.Administration.Api.Tests/**"
+      - ".github/workflows/administration-api-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/Administration/OpenHub.Administration.Api/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "tests/Administration/OpenHub.Administration.Api.Tests/**"
+      - ".github/workflows/administration-api-ci.yml"
+
+concurrency:
+  group: administration-api-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore src/Administration/OpenHub.Administration.Api/OpenHub.Administration.Api.csproj
+
+      - name: Build
+        run: dotnet build src/Administration/OpenHub.Administration.Api/OpenHub.Administration.Api.csproj --configuration Release --no-restore
+
+      - name: Restore tests
+        run: dotnet restore tests/Administration/OpenHub.Administration.Api.Tests/OpenHub.Administration.Api.Tests.csproj
+
+      - name: Build tests
+        run: dotnet build tests/Administration/OpenHub.Administration.Api.Tests/OpenHub.Administration.Api.Tests.csproj --configuration Release --no-restore
+
+      # Unit tests only — see productmanager-api-ci.yml's comment on the Integration filter.
+      - name: Run unit tests
+        run: >
+          dotnet test tests/Administration/OpenHub.Administration.Api.Tests/OpenHub.Administration.Api.Tests.csproj
+          --configuration Release --no-build
+          --filter "Category!=Integration"
+          --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: administration-api-test-results
+          path: tests/Administration/OpenHub.Administration.Api.Tests/TestResults/test-results.trx

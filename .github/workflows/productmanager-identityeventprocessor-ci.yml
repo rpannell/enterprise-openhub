@@ -1,0 +1,64 @@
+name: ProductManager IdentityEventProcessor CI
+
+# Same per-project pattern as productmanager-api-ci.yml — see that file's comment. This one
+# covers the background worker consuming Keycloak identity events (tenant/user sync), not the Api.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/ProductManager/OpenHub.ProductManager.IdentityEventProcessor/**"
+      - "src/Platform/OpenHub.Platform.IdentityEvents.Contracts/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "tests/ProductManager/OpenHub.ProductManager.IdentityEventProcessor.Tests/**"
+      - ".github/workflows/productmanager-identityeventprocessor-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/ProductManager/OpenHub.ProductManager.IdentityEventProcessor/**"
+      - "src/Platform/OpenHub.Platform.IdentityEvents.Contracts/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "tests/ProductManager/OpenHub.ProductManager.IdentityEventProcessor.Tests/**"
+      - ".github/workflows/productmanager-identityeventprocessor-ci.yml"
+
+concurrency:
+  group: productmanager-identityeventprocessor-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore src/ProductManager/OpenHub.ProductManager.IdentityEventProcessor/OpenHub.ProductManager.IdentityEventProcessor.csproj
+
+      - name: Build
+        run: dotnet build src/ProductManager/OpenHub.ProductManager.IdentityEventProcessor/OpenHub.ProductManager.IdentityEventProcessor.csproj --configuration Release --no-restore
+
+      - name: Restore tests
+        run: dotnet restore tests/ProductManager/OpenHub.ProductManager.IdentityEventProcessor.Tests/OpenHub.ProductManager.IdentityEventProcessor.Tests.csproj
+
+      - name: Build tests
+        run: dotnet build tests/ProductManager/OpenHub.ProductManager.IdentityEventProcessor.Tests/OpenHub.ProductManager.IdentityEventProcessor.Tests.csproj --configuration Release --no-restore
+
+      # Unit tests only — see productmanager-api-ci.yml's comment on the Integration filter.
+      - name: Run unit tests
+        run: >
+          dotnet test tests/ProductManager/OpenHub.ProductManager.IdentityEventProcessor.Tests/OpenHub.ProductManager.IdentityEventProcessor.Tests.csproj
+          --configuration Release --no-build
+          --filter "Category!=Integration"
+          --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: productmanager-identityeventprocessor-test-results
+          path: tests/ProductManager/OpenHub.ProductManager.IdentityEventProcessor.Tests/TestResults/test-results.trx

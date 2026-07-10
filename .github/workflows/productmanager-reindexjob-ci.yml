@@ -1,0 +1,45 @@
+name: ProductManager ReindexJob CI
+
+# Same per-project pattern as productmanager-api-ci.yml — see that file's comment. This one
+# covers the ReindexJob console app (full Elasticsearch catalog reindex). No dedicated test
+# project exists for it yet (unlike the Api/ElasticProcessor/IdentityEventProcessor siblings),
+# so this is build-only for now — add a test step here once tests/ProductManager gets one.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/ProductManager/OpenHub.ProductManager.ReindexJob/**"
+      - "src/ProductManager/OpenHub.ProductManager.Contracts/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "src/Accessor/OpenHub.Accessor.ElasticIndex/**"
+      - ".github/workflows/productmanager-reindexjob-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/ProductManager/OpenHub.ProductManager.ReindexJob/**"
+      - "src/ProductManager/OpenHub.ProductManager.Contracts/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "src/Accessor/OpenHub.Accessor.ElasticIndex/**"
+      - ".github/workflows/productmanager-reindexjob-ci.yml"
+
+concurrency:
+  group: productmanager-reindexjob-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore src/ProductManager/OpenHub.ProductManager.ReindexJob/OpenHub.ProductManager.ReindexJob.csproj
+
+      - name: Build
+        run: dotnet build src/ProductManager/OpenHub.ProductManager.ReindexJob/OpenHub.ProductManager.ReindexJob.csproj --configuration Release --no-restore
