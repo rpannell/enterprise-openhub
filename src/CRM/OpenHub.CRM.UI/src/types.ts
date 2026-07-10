@@ -6,12 +6,11 @@ export interface SalesPersonPicklistItem {
   displayName: string;
 }
 
-// Mirrors OpenHub.SalesOrg.Api's Models/Responses/V1/*.cs shapes — used by the read-only
-// "Sales Hierarchy" viewer (src/salesorg/SalesHierarchyView.tsx), not by the client picklist
-// above. Deliberately not a full management model: no create/update request types, since this
-// UI pass is view-only.
+// Mirrors OpenHub.SalesOrg.Api's Models/Responses/V1/*.cs shapes — used by the "Sales Hierarchy"
+// viewer (src/salesorg/SalesHierarchyView.tsx), not by the client picklist above.
 export interface SalesPerson {
   id: string;
+  uniqueId: string | null;
   firstName: string;
   lastName: string;
   email: string;
@@ -25,14 +24,60 @@ export interface SalesPerson {
   updatedAt: string;
 }
 
+export interface AvailableKeycloakUser {
+  uniqueId: string;
+  username: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+export interface CreateSalesPersonRequest {
+  uniqueId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string | null;
+  jobTitle?: string | null;
+  employeeNumber?: string | null;
+  startDate?: string | null;
+}
+
+// No email: it's owned by the linked Keycloak identity, not editable here.
+export interface UpdateSalesPersonRequest {
+  firstName?: string;
+  lastName?: string;
+  phone?: string | null;
+  jobTitle?: string | null;
+  employeeNumber?: string | null;
+  activeStatus?: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
 export interface SalesRole {
   id: string;
   name: string;
   description: string | null;
+  parentRoleId: string | null;
   hierarchyLevel: number | null;
   activeStatus: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateSalesRoleRequest {
+  name: string;
+  description?: string | null;
+  parentRoleId?: string | null;
+}
+
+// No hierarchyLevel: it's derived server-side from parentRoleId, not client-supplied.
+export interface UpdateSalesRoleRequest {
+  name?: string;
+  description?: string | null;
+  parentRoleId?: string | null;
+  activeStatus?: boolean;
 }
 
 export interface SalesOrganizationUnit {
@@ -44,6 +89,21 @@ export interface SalesOrganizationUnit {
   activeStatus: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateSalesOrganizationUnitRequest {
+  name: string;
+  description?: string | null;
+  organizationUnitType: string;
+  parentOrganizationUnitId?: string | null;
+}
+
+export interface UpdateSalesOrganizationUnitRequest {
+  name?: string;
+  description?: string | null;
+  organizationUnitType?: string;
+  parentOrganizationUnitId?: string | null;
+  activeStatus?: boolean;
 }
 
 export interface SalesAssignment {
@@ -60,6 +120,21 @@ export interface SalesAssignment {
   activeStatus: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateSalesAssignmentRequest {
+  salesPersonId: string;
+  organizationUnitId: string;
+  roleId: string;
+  effectiveStartDate: string;
+  effectiveEndDate?: string | null;
+  primaryAssignmentFlag?: boolean;
+}
+
+export interface UpdateSalesAssignmentRequest {
+  effectiveEndDate?: string | null;
+  primaryAssignmentFlag?: boolean;
+  activeStatus?: boolean;
 }
 
 export type AddressType = "billing" | "shipping" | "headquarters" | "other";
