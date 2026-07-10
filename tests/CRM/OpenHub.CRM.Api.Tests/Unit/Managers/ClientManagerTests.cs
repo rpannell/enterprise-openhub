@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using NSubstitute;
 using Shouldly;
 using Xunit;
+using OpenHub.Accessor.KeyCloak;
 using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.Accessor.KeyCloak.Models;
 using OpenHub.Accessor.RabbitMq;
@@ -133,6 +134,105 @@ public class ClientManagerTests
                 e.RealmSlug == RealmSlug &&
                 e.IsDeleted == false),
             Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_KeycloakConflictOnOwnAlias_RecoversByLookingUpExistingOrganization()
+    {
+        var manager = CreateManager();
+        var salesPerson = MakeSalesPerson();
+        var createdEntity = MakeClientEntity(salesPersonId: salesPerson.Id);
+        string? capturedAlias = null;
+
+        _salesOrgApiAccessor.GetSalesPersonByIdAsync(salesPerson.Id, Arg.Any<CancellationToken>()).Returns(salesPerson);
+        _kcRealmAccessor.GetRealmBySlugAsync(RealmSlug, Arg.Any<CancellationToken>())
+            .Returns(new KeyCloakRealmInfo { Id = "realm-1", Realm = RealmSlug, Enabled = true });
+
+        // Simulates the platform's standard HTTP resilience handler retrying our POST after the
+        // original (successful) response was lost — Keycloak now says the alias we generated
+        // already exists, because our own earlier attempt actually created it.
+        _kcOrgAccessor.CreateOrganizationAsync(RealmSlug, Arg.Any<CreateKeyCloakOrganizationRequest>(), Arg.Any<CancellationToken>())
+            .Returns<string>(ci =>
+            {
+                capturedAlias = ci.Arg<CreateKeyCloakOrganizationRequest>().Alias;
+                throw new KeyCloakAdminConflictException("conflict");
+            });
+        _kcOrgAccessor.ListOrganizationsAsync(RealmSlug, Arg.Any<CancellationToken>())
+            .Returns(_ => (IReadOnlyList<KeyCloakOrganizationInfo>)
+                [new KeyCloakOrganizationInfo { Id = "kc-org-existing", Name = "Acme Co", Alias = capturedAlias!, Enabled = true }]);
+
+        ClientEntity? capturedEntity = null;
+        _clientAccessor.CreateAsync(Arg.Do<ClientEntity>(e => capturedEntity = e), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var e = ci.Arg<ClientEntity>();
+                e.Id = createdEntity.Id;
+                return e;
+            });
+        _clientAccessor.GetByIdAsync(createdEntity.Id, Arg.Any<CancellationToken>()).Returns(createdEntity);
+
+        var result = await manager.CreateAsync(MakeCreateRequest(salesPerson.Id), Guid.NewGuid());
+
+        result.Id.ShouldBe(createdEntity.Id);
+        capturedEntity!.KeycloakOrganizationId.ShouldBe("kc-org-existing");
+        await _kcOrgAccessor.Received(1).ListOrganizationsAsync(RealmSlug, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CreateAsync_KeycloakConflictOnOrphanedOrganizationName_RecoversByNameMatch()
+    {
+        // Keycloak organizations enforce a unique name as well as a unique alias. An orphaned
+        // organization — created successfully in some earlier attempt whose client row never
+        // got written — blocks every future attempt to (re-)create a client with that name,
+        // even though the alias we generate is fresh and never collides.
+        var manager = CreateManager();
+        var salesPerson = MakeSalesPerson();
+        var createdEntity = MakeClientEntity(salesPersonId: salesPerson.Id);
+
+        _salesOrgApiAccessor.GetSalesPersonByIdAsync(salesPerson.Id, Arg.Any<CancellationToken>()).Returns(salesPerson);
+        _kcRealmAccessor.GetRealmBySlugAsync(RealmSlug, Arg.Any<CancellationToken>())
+            .Returns(new KeyCloakRealmInfo { Id = "realm-1", Realm = RealmSlug, Enabled = true });
+
+        _kcOrgAccessor.CreateOrganizationAsync(RealmSlug, Arg.Any<CreateKeyCloakOrganizationRequest>(), Arg.Any<CancellationToken>())
+            .Returns<string>(_ => throw new KeyCloakAdminConflictException("conflict"));
+        _kcOrgAccessor.ListOrganizationsAsync(RealmSlug, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<KeyCloakOrganizationInfo>)
+                [new KeyCloakOrganizationInfo { Id = "kc-org-orphan", Name = "Acme Co", Alias = "acme-co-deadbeef", Enabled = true }]);
+
+        ClientEntity? capturedEntity = null;
+        _clientAccessor.CreateAsync(Arg.Do<ClientEntity>(e => capturedEntity = e), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var e = ci.Arg<ClientEntity>();
+                e.Id = createdEntity.Id;
+                return e;
+            });
+        _clientAccessor.GetByIdAsync(createdEntity.Id, Arg.Any<CancellationToken>()).Returns(createdEntity);
+
+        var result = await manager.CreateAsync(MakeCreateRequest(salesPerson.Id), Guid.NewGuid());
+
+        result.Id.ShouldBe(createdEntity.Id);
+        capturedEntity!.KeycloakOrganizationId.ShouldBe("kc-org-orphan");
+    }
+
+    [Fact]
+    public async Task CreateAsync_KeycloakConflictMatchesNothing_RethrowsOriginalConflict()
+    {
+        var manager = CreateManager();
+        var salesPerson = MakeSalesPerson();
+
+        _salesOrgApiAccessor.GetSalesPersonByIdAsync(salesPerson.Id, Arg.Any<CancellationToken>()).Returns(salesPerson);
+        _kcRealmAccessor.GetRealmBySlugAsync(RealmSlug, Arg.Any<CancellationToken>())
+            .Returns(new KeyCloakRealmInfo { Id = "realm-1", Realm = RealmSlug, Enabled = true });
+
+        _kcOrgAccessor.CreateOrganizationAsync(RealmSlug, Arg.Any<CreateKeyCloakOrganizationRequest>(), Arg.Any<CancellationToken>())
+            .Returns<string>(_ => throw new KeyCloakAdminConflictException("conflict"));
+        _kcOrgAccessor.ListOrganizationsAsync(RealmSlug, Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyList<KeyCloakOrganizationInfo>)
+                [new KeyCloakOrganizationInfo { Id = "kc-org-unrelated", Name = "Some Other Company", Alias = "some-other-company-abc", Enabled = true }]);
+
+        await Should.ThrowAsync<KeyCloakAdminConflictException>(
+            () => manager.CreateAsync(MakeCreateRequest(salesPerson.Id), Guid.NewGuid()));
     }
 
     [Fact]
