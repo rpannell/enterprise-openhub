@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Npgsql;
 using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.CRM.Api.Accessors.Data;
 using OpenHub.CRM.Api.Accessors.Interfaces;
@@ -41,11 +42,11 @@ public class TenantAccessor(
             cancellationToken: ct);
 
     public async Task<Guid?> GetOrProvisionUserAsync(
-        Guid tenantId, string uniqueId, string email, string firstName, string lastName,
+        Guid tenantId, string realmSlug, string uniqueId, string email, string firstName, string lastName,
         CancellationToken ct = default)
         => await cache.GetOrCreateAsync(
             $"user:{tenantId}:{uniqueId}",
-            async _ => await ResolveOrProvisionUserAsync(tenantId, uniqueId, email, firstName, lastName, ct),
+            async _ => await ResolveOrProvisionUserAsync(tenantId, realmSlug, uniqueId, email, firstName, lastName, ct),
             UserCacheOptions,
             cancellationToken: ct);
 
@@ -80,42 +81,76 @@ public class TenantAccessor(
     }
 
     private async Task<Guid?> ResolveOrProvisionUserAsync(
-        Guid tenantId, string uniqueId, string email, string firstName, string lastName,
+        Guid tenantId, string realmSlug, string uniqueId, string email, string firstName, string lastName,
         CancellationToken ct)
     {
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
-            await db.Database.ExecuteSqlRawAsync(
-                "SELECT set_config('app.current_tenant_id', {0}, true)", [tenantId.ToString()], ct);
-
-            var existing = await db.Users.AsNoTracking()
-                .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.UniqueId == uniqueId, ct);
-
-            if (existing is not null)
+            for (var attempt = 0; attempt < 2; attempt++)
             {
-                await tx.CommitAsync(ct);
-                return (Guid?)existing.Id;
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                await db.Database.ExecuteSqlRawAsync(
+                    "SELECT set_config('app.current_tenant_id', {0}, true)", [tenantId.ToString()], ct);
+
+                var existing = await db.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.UniqueId == uniqueId, ct);
+
+                if (existing is not null)
+                {
+                    await tx.CommitAsync(ct);
+                    return (Guid?)existing.Id;
+                }
+
+                var newUser = new UserEntity
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    UniqueId = uniqueId,
+                    Email = email,
+                    FirstName = string.IsNullOrWhiteSpace(firstName) ? uniqueId : firstName,
+                    LastName = string.IsNullOrWhiteSpace(lastName) ? "-" : lastName,
+                    IsActive = true,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+
+                db.Users.Add(newUser);
+
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                    await tx.CommitAsync(ct);
+                    return (Guid?)newUser.Id;
+                }
+                catch (DbUpdateException ex) when (attempt == 0 && IsTenantForeignKeyViolation(ex))
+                {
+                    // The cached tenant said it exists, but Postgres disagrees — typically local
+                    // dev, where the Redis volume survives a Postgres reset/reseed. Evict the
+                    // stale entry, re-provision the tenant, and retry the insert once before
+                    // surfacing a 500 for something that's self-healable.
+                    db.Entry(newUser).State = EntityState.Detached;
+                    await cache.RemoveAsync($"tenant:id:{tenantId}", ct);
+                    await ResolveOrProvisionTenantAsync(tenantId, realmSlug, ct);
+                }
+                catch (DbUpdateException ex) when (attempt == 0 && IsDuplicateUser(ex))
+                {
+                    // Lost a race with a concurrent request provisioning the same user — e.g. two
+                    // pods handling parallel first-time requests, where HybridCache's stampede
+                    // protection only coalesces calls within one process. The other request's
+                    // insert already committed, so the next loop iteration's "existing" check
+                    // will pick it up.
+                    db.Entry(newUser).State = EntityState.Detached;
+                }
             }
 
-            var newUser = new UserEntity
-            {
-                Id = Guid.NewGuid(),
-                TenantId = tenantId,
-                UniqueId = uniqueId,
-                Email = email,
-                FirstName = string.IsNullOrWhiteSpace(firstName) ? uniqueId : firstName,
-                LastName = string.IsNullOrWhiteSpace(lastName) ? "-" : lastName,
-                IsActive = true,
-                CreatedAt = DateTimeOffset.UtcNow,
-                UpdatedAt = DateTimeOffset.UtcNow
-            };
-
-            db.Users.Add(newUser);
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-            return (Guid?)newUser.Id;
+            return null;
         });
     }
+
+    private static bool IsTenantForeignKeyViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: "23503", ConstraintName: "users_tenant_id_fkey" };
+
+    private static bool IsDuplicateUser(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: "23505", ConstraintName: "uq_crm_users_tenant_unique_id" };
 }

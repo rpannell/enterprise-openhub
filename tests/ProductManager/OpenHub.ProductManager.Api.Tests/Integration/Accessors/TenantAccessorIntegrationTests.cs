@@ -56,12 +56,13 @@ public class TenantAccessorIntegrationTests(PostgresCollectionFixture fixture)
     [Fact]
     public async Task GetOrProvisionUserAsync_UserMissing_CreatesNewUser_ScopedToTenant()
     {
-        var tenantId = await SeedTenantAsync("client-" + Guid.NewGuid().ToString("N")[..8]);
+        var slug = "client-" + Guid.NewGuid().ToString("N")[..8];
+        var tenantId = await SeedTenantAsync(slug);
         await using var db = fixture.CreateDbContext();
         var accessor = CreateAccessor(db);
 
         var userId = await accessor.GetOrProvisionUserAsync(
-            tenantId, "kc-user-1", "a@example.com", "Ada", "Lovelace");
+            tenantId, slug, "kc-user-1", "a@example.com", "Ada", "Lovelace");
 
         userId.ShouldNotBeNull();
         await using var assertDb = fixture.CreateSuperuserDbContext();
@@ -73,12 +74,13 @@ public class TenantAccessorIntegrationTests(PostgresCollectionFixture fixture)
     [Fact]
     public async Task GetOrProvisionUserAsync_UserAlreadyExists_ReturnsExistingId_DoesNotDuplicate()
     {
-        var tenantId = await SeedTenantAsync("client-" + Guid.NewGuid().ToString("N")[..8]);
+        var slug = "client-" + Guid.NewGuid().ToString("N")[..8];
+        var tenantId = await SeedTenantAsync(slug);
         await using var db = fixture.CreateDbContext();
         var accessor = CreateAccessor(db);
 
-        var firstId = await accessor.GetOrProvisionUserAsync(tenantId, "kc-user-1", "a@example.com", "Ada", "Lovelace");
-        var secondId = await accessor.GetOrProvisionUserAsync(tenantId, "kc-user-1", "a@example.com", "Ada", "Lovelace");
+        var firstId = await accessor.GetOrProvisionUserAsync(tenantId, slug, "kc-user-1", "a@example.com", "Ada", "Lovelace");
+        var secondId = await accessor.GetOrProvisionUserAsync(tenantId, slug, "kc-user-1", "a@example.com", "Ada", "Lovelace");
 
         secondId.ShouldBe(firstId);
         await using var assertDb = fixture.CreateSuperuserDbContext();
@@ -89,13 +91,15 @@ public class TenantAccessorIntegrationTests(PostgresCollectionFixture fixture)
     [Fact]
     public async Task GetOrProvisionUserAsync_DifferentTenantsSameUniqueId_CreatesSeparateUsers()
     {
-        var tenantA = await SeedTenantAsync("client-a-" + Guid.NewGuid().ToString("N")[..8]);
-        var tenantB = await SeedTenantAsync("client-b-" + Guid.NewGuid().ToString("N")[..8]);
+        var slugA = "client-a-" + Guid.NewGuid().ToString("N")[..8];
+        var slugB = "client-b-" + Guid.NewGuid().ToString("N")[..8];
+        var tenantA = await SeedTenantAsync(slugA);
+        var tenantB = await SeedTenantAsync(slugB);
         await using var db = fixture.CreateDbContext();
         var accessor = CreateAccessor(db);
 
-        var idInA = await accessor.GetOrProvisionUserAsync(tenantA, "kc-user-1", "a@example.com", "Ada", "Lovelace");
-        var idInB = await accessor.GetOrProvisionUserAsync(tenantB, "kc-user-1", "a@example.com", "Ada", "Lovelace");
+        var idInA = await accessor.GetOrProvisionUserAsync(tenantA, slugA, "kc-user-1", "a@example.com", "Ada", "Lovelace");
+        var idInB = await accessor.GetOrProvisionUserAsync(tenantB, slugB, "kc-user-1", "a@example.com", "Ada", "Lovelace");
 
         idInA.ShouldNotBe(idInB);
     }

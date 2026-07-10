@@ -30,7 +30,7 @@ public class TenantMiddleware(RequestDelegate next)
                     if (sub is not null)
                     {
                         var userId = await tenantAccessor.GetOrProvisionUserAsync(
-                            tenant.Id, sub, email, firstName, lastName, context.RequestAborted);
+                            tenant.Id, realmSlug, sub, email, firstName, lastName, context.RequestAborted);
 
                         if (userId is not null)
                             context.Items["UserId"] = userId.Value;
