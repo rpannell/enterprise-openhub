@@ -10,6 +10,6 @@ public class CreateSalesRoleRequest
     [Description("Description of this role's responsibilities.")]
     public string? Description { get; set; }
 
-    [Description("Rank used to derive org-unit leadership and manager chains — higher outranks lower within the same org unit. Optional; a role with no level never outranks anyone.")]
-    public int? HierarchyLevel { get; set; }
+    [Description("The role this one reports up to (e.g. Sales Rep's parent is District Manager). Determines rank automatically — the new role's hierarchy level is set to the parent's level minus 100. Omit for a top-level role that outranks everyone below it.")]
+    public Guid? ParentRoleId { get; set; }
 }

@@ -30,4 +30,8 @@ public partial class SalesPersonMapper
     public partial SalesPersonResponse ToResponse(SalesPersonDto dto);
 
     public partial IReadOnlyList<SalesPersonResponse> ToResponseList(IEnumerable<SalesPersonDto> dtos);
+
+    // Manager -> Controller (available-keycloak-users picker)
+    public partial AvailableKeycloakUserResponse ToResponse(AvailableKeycloakUserDto dto);
+    public partial IReadOnlyList<AvailableKeycloakUserResponse> ToResponseList(IEnumerable<AvailableKeycloakUserDto> dtos);
 }

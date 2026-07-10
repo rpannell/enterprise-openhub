@@ -44,14 +44,21 @@ public class KeyCloakUserAccessor(HttpClient http, KeyCloakAdminTokenProvider to
         return location.Segments[^1];
     }
 
+    // Keycloak's admin API defaults "max" to 100 when the query param is omitted, silently
+    // truncating the result for any realm with more users than that — callers who need "every
+    // user in the realm" (not a bounded search) would otherwise miss users past the cutoff.
+    // 1000 comfortably covers realistic per-tenant realm sizes; revisit with real pagination
+    // (first/max exposed to callers) if that ever isn't enough.
+    private const int MaxUsersPerListCall = 1000;
+
     public async Task<IReadOnlyList<KeyCloakUserInfo>> ListUsersAsync(
         string realmSlug, string? search = null, CancellationToken ct = default)
     {
         var adminToken = await tokenProvider.GetAdminTokenAsync(http, ct);
 
-        var path = $"/admin/realms/{Uri.EscapeDataString(realmSlug)}/users";
+        var path = $"/admin/realms/{Uri.EscapeDataString(realmSlug)}/users?max={MaxUsersPerListCall}";
         if (!string.IsNullOrWhiteSpace(search))
-            path += $"?search={Uri.EscapeDataString(search)}";
+            path += $"&search={Uri.EscapeDataString(search)}";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = new("Bearer", adminToken);

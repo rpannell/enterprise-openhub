@@ -13,7 +13,10 @@ public class SalesRoleResponse
     [Description("Description of this role's responsibilities.")]
     public string? Description { get; set; }
 
-    [Description("Rank used to derive org-unit leadership and manager chains.")]
+    [Description("The role this one reports up to, if any.")]
+    public Guid? ParentRoleId { get; set; }
+
+    [Description("Rank used to derive org-unit leadership and manager chains — derived automatically from ParentRoleId, higher outranks lower within the same org unit.")]
     public int? HierarchyLevel { get; set; }
 
     [Description("Whether this role is currently active/assignable.")]

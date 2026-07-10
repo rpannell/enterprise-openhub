@@ -2,6 +2,9 @@ using System.ComponentModel;
 
 namespace OpenHub.SalesOrg.Api.Models.Requests;
 
+// No Email field: it's owned by the linked Keycloak identity, not editable here. FirstName/
+// LastName stay editable for now — a later Keycloak identity-event sync (mirroring
+// ProductManager.Api's SyncUserAsync pattern) will take over keeping those current too.
 public class UpdateSalesPersonRequest
 {
     [Description("First name.")]
@@ -9,9 +12,6 @@ public class UpdateSalesPersonRequest
 
     [Description("Last name.")]
     public string? LastName { get; set; }
-
-    [Description("Email address.")]
-    public string? Email { get; set; }
 
     [Description("Phone number.")]
     public string? Phone { get; set; }

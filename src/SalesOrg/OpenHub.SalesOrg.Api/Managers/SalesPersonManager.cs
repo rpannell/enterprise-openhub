@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.SalesOrg.Api.Accessors.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Engines.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Interfaces;
@@ -14,6 +15,7 @@ public class SalesPersonManager(
     ISalesRoleAccessor roleAccessor,
     ISalesOrganizationUnitAccessor orgUnitAccessor,
     ISalesOrgHierarchyEngine hierarchyEngine,
+    IKeyCloakUserAccessor keyCloakUserAccessor,
     SalesPersonMapper personMapper,
     SalesAssignmentMapper assignmentMapper,
     SalesRoleMapper roleMapper,
@@ -24,8 +26,33 @@ public class SalesPersonManager(
         http.HttpContext?.Items["TenantId"] as Guid?
             ?? throw new InvalidOperationException("Tenant context not set. Ensure TenantMiddleware is registered.");
 
+    private string RealmSlug =>
+        http.HttpContext?.Items["TenantSlug"] as string
+            ?? throw new InvalidOperationException("Tenant context not set. Ensure TenantMiddleware is registered.");
+
     public async Task<IReadOnlyList<SalesPersonDto>> GetAllAsync(CancellationToken ct = default)
         => personMapper.ToDtoList(await personAccessor.GetAllAsync(ct));
+
+    public async Task<IReadOnlyList<AvailableKeycloakUserDto>> GetAvailableKeycloakUsersAsync(CancellationToken ct = default)
+    {
+        var realmUsers = await keyCloakUserAccessor.ListUsersAsync(RealmSlug, ct: ct);
+        var linkedUniqueIds = (await personAccessor.GetAllAsync(ct))
+            .Where(p => p.UniqueId is not null)
+            .Select(p => p.UniqueId)
+            .ToHashSet();
+
+        return realmUsers
+            .Where(u => !linkedUniqueIds.Contains(u.Id))
+            .Select(u => new AvailableKeycloakUserDto
+            {
+                UniqueId = u.Id,
+                Username = u.Username,
+                Email = u.Email,
+                FirstName = u.FirstName,
+                LastName = u.LastName,
+            })
+            .ToList();
+    }
 
     public async Task<SalesPersonDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -55,7 +82,6 @@ public class SalesPersonManager(
 
         if (request.FirstName is not null) existing.FirstName = request.FirstName;
         if (request.LastName is not null) existing.LastName = request.LastName;
-        if (request.Email is not null) existing.Email = request.Email;
         if (request.Phone is not null) existing.Phone = request.Phone;
         if (request.JobTitle is not null) existing.JobTitle = request.JobTitle;
         if (request.EmployeeNumber is not null) existing.EmployeeNumber = request.EmployeeNumber;

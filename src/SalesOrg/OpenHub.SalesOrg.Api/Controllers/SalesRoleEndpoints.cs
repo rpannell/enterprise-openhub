@@ -53,7 +53,7 @@ public static class SalesRoleEndpoints
         })
         .WithName("CreateSalesRole")
         .WithSummary("Create a sales role")
-        .WithDescription("Creates a new sales role in the caller's tenant. HierarchyLevel is optional — a role with no configured level never outranks anyone in the manager-chain algorithm.")
+        .WithDescription("Creates a new sales role in the caller's tenant. ParentRoleId is optional — pick the role this one reports up to and its hierarchy level is derived automatically; omit it for a top-level role that outranks everyone below it.")
         .Produces<SalesRoleResponse>(StatusCodes.Status201Created)
         .ProducesValidationProblem()
         .AddEndpointFilter<ValidationFilter<CreateSalesRoleRequest>>();

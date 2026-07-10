@@ -31,6 +31,16 @@ public static class SalesPersonEndpoints
         .WithDescription("Returns every non-deleted sales person belonging to the authenticated tenant. Results are automatically scoped to the caller's tenant via Row Level Security.")
         .Produces<IReadOnlyList<SalesPersonResponse>>(StatusCodes.Status200OK);
 
+        group.MapGet("/available-keycloak-users", async (ISalesPersonManager manager, SalesPersonMapper mapper, CancellationToken ct) =>
+        {
+            var dtos = await manager.GetAvailableKeycloakUsersAsync(ct);
+            return Results.Ok(mapper.ToResponseList(dtos));
+        })
+        .WithName("GetAvailableKeycloakUsersForSalesPerson")
+        .WithSummary("List Keycloak users available to become a sales person")
+        .WithDescription("Returns users in the caller's Keycloak realm who aren't already linked to a sales person. Backs the \"new sales person\" picker — sales people are always created by linking an existing Keycloak identity, not by typing name/email freehand, since they need to be able to log in.")
+        .Produces<IReadOnlyList<AvailableKeycloakUserResponse>>(StatusCodes.Status200OK);
+
         group.MapGet("/{id:guid}", async (Guid id, ISalesPersonManager manager, SalesPersonMapper mapper, CancellationToken ct) =>
         {
             var dto = await manager.GetByIdAsync(id, ct);
