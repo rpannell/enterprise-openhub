@@ -9,6 +9,11 @@ namespace OpenHub.Accessor.KeyCloak;
 public class KeyCloakOrganizationAccessor(HttpClient http, KeyCloakAdminTokenProvider tokenProvider)
     : IKeyCloakOrganizationAccessor
 {
+    // Keycloak's admin API defaults "max" to 100 when the query param is omitted, silently
+    // truncating the result for any realm with more organizations than that. See the identical
+    // note on KeyCloakUserAccessor.ListUsersAsync — same gotcha, same fix.
+    private const int MaxOrganizationsPerListCall = 1000;
+
     public async Task<string> CreateOrganizationAsync(
         string realmSlug, CreateKeyCloakOrganizationRequest request, CancellationToken ct = default)
     {
@@ -67,7 +72,8 @@ public class KeyCloakOrganizationAccessor(HttpClient http, KeyCloakAdminTokenPro
         var adminToken = await tokenProvider.GetAdminTokenAsync(http, ct);
 
         using var request = new HttpRequestMessage(
-            HttpMethod.Get, $"/admin/realms/{Uri.EscapeDataString(realmSlug)}/organizations");
+            HttpMethod.Get,
+            $"/admin/realms/{Uri.EscapeDataString(realmSlug)}/organizations?max={MaxOrganizationsPerListCall}");
         request.Headers.Authorization = new("Bearer", adminToken);
 
         using var response = await http.SendAsync(request, ct);

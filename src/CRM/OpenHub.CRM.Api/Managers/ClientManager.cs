@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using OpenHub.Accessor.KeyCloak;
 using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.Accessor.KeyCloak.Models;
 using OpenHub.Accessor.RabbitMq;
@@ -54,13 +55,7 @@ public class ClientManager(
             ?? throw new InvalidOperationException($"Realm '{TenantSlug}' does not exist.");
 
         var alias = BuildOrganizationAlias(request.Name);
-        var organizationId = await keyCloakOrganizationAccessor.CreateOrganizationAsync(realm.Realm, new CreateKeyCloakOrganizationRequest
-        {
-            Name = request.Name,
-            Alias = alias,
-            Enabled = true,
-            Domains = []
-        }, ct);
+        var organizationId = await CreateOrganizationIdempotentlyAsync(realm.Realm, request.Name, alias, ct);
 
         var dto = mapper.ToDto(request);
         dto.TenantId = TenantId;
@@ -217,5 +212,46 @@ public class ClientManager(
         var slug = new string([.. name.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-')])
             .Trim('-');
         return $"{slug}-{Guid.NewGuid().ToString("N")[..8]}";
+    }
+
+    /// <summary>
+    /// Creates the Keycloak organization, tolerating a 409 two different ways this can happen:
+    ///
+    /// 1. Alias collision — the alias carries a fresh random suffix each call, so a genuine
+    ///    collision with some other, pre-existing organization is astronomically unlikely. In
+    ///    practice this means our own POST already succeeded once and got retried by the
+    ///    platform's standard HTTP resilience handler after the original response was lost
+    ///    (e.g. a slow Keycloak reply tripping the per-attempt timeout).
+    /// 2. Name collision — Keycloak organizations also enforce a unique *name* within a realm,
+    ///    independent of alias. An orphaned organization (created successfully, but whose client
+    ///    row never got written — e.g. a later step in an earlier CreateAsync failed after this
+    ///    point) blocks every future attempt to (re-)create a client with that same name, each
+    ///    time under a different, never-colliding alias.
+    ///
+    /// Either way, failing the whole client creation over a 409 we can resolve is unnecessary —
+    /// look up what already exists and carry on.
+    /// </summary>
+    private async Task<string> CreateOrganizationIdempotentlyAsync(
+        string realm, string name, string alias, CancellationToken ct)
+    {
+        try
+        {
+            return await keyCloakOrganizationAccessor.CreateOrganizationAsync(realm, new CreateKeyCloakOrganizationRequest
+            {
+                Name = name,
+                Alias = alias,
+                Enabled = true,
+                Domains = []
+            }, ct);
+        }
+        catch (KeyCloakAdminConflictException)
+        {
+            var existing = (await keyCloakOrganizationAccessor.ListOrganizationsAsync(realm, ct))
+                .FirstOrDefault(o => o.Alias == alias || string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+                throw; // neither alias nor name matches anything we can find — surface the real conflict
+
+            return existing.Id;
+        }
     }
 }
