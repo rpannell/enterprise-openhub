@@ -57,5 +57,13 @@ export default defineConfig({
       testMatch: "federated.spec.ts",
       use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:5176" },
     },
+    {
+      // Chromium-based mobile emulation (not "iPhone 12" — that's WebKit, and every other
+      // project here deliberately sticks to "Desktop Chrome" so CI only needs one browser
+      // installed), sized to a common small-phone viewport.
+      name: "mobile",
+      testMatch: "mobile.spec.ts",
+      use: { ...devices["Pixel 5"], baseURL: "http://localhost:5176" },
+    },
   ],
 });
