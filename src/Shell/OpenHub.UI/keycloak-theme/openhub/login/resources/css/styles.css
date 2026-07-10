@@ -1,248 +1,390 @@
 /*
  * OpenHub — Keycloak login theme
- * Palette matches the React app: accent indigo #4A47C7, amber highlight #F2A93B.
- *
- * Layout: the login form sits in a panel anchored to the right —
- * full width on phone, half the screen on tablet, a third on desktop.
- * The remaining space (desktop/tablet only) shows a branded gradient
- * with a faint watermark of the hub mark.
- *
- * Plain CSS, no build step, no JS — overriding the classes and PatternFly
- * CSS variables Keycloak's default login theme (parent=keycloak) uses.
- * Confirmed against Keycloak's own theme.properties: kcLoginClass=
- * login-pf-page, kcFormCardClass=card-pf. If a future version renames
- * these, open devtools on the login page to find the new ones.
- *
- * Dark mode follows the OS/browser preference (prefers-color-scheme) —
- * there's no toggle here, since nobody's logged in yet to remember one for.
- *
- * Optional: load Space Grotesk/Inter from Google Fonts to match the app
- * exactly. Commented out by default since this is a login page — some
- * orgs prefer not to load third-party fonts here. Uncomment to enable,
- * or self-host the font files instead.
+ * Targets BOTH Bootstrap class names (older Keycloak) AND
+ * PatternFly 4 class names (Keycloak v21+), plus bare element
+ * selectors as a catch-all so styling works regardless of version.
  */
-/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap'); */
 
+/* -----------------------------------------------------------------------
+   Variables + reset
+   ----------------------------------------------------------------------- */
 :root {
-  --pf-global--primary-color--100: #4a47c7;
-  --pf-global--primary-color--200: #3a37a0;
-  --pf-global--link--Color: #4a47c7;
-  --pf-global--link--Color--hover: #3a37a0;
-  --pf-global--FontFamily--sans-serif: "Space Grotesk", "Inter", system-ui,
-    -apple-system, "Segoe UI", Roboto, sans-serif;
+  --oh-accent:      #4a47c7;
+  --oh-accent-dark: #3a37a0;
+  --oh-highlight:   #f2a93b;
+  --oh-surface:     #ffffff;
+  --oh-canvas:      #f8fafc;
+  --oh-border:      #cbd5e1;
+  --oh-text:        #14171f;
+  --oh-muted:       #475569;
 }
 
-html, body.login-pf {
+*, *::before, *::after { box-sizing: border-box; }
+
+/* -----------------------------------------------------------------------
+   Page background — gradient fills the whole viewport behind everything
+   ----------------------------------------------------------------------- */
+html {
   height: 100%;
+  background: linear-gradient(170deg, #5046e5 0%, #2d2a8e 55%, #18156a 100%) !important;
 }
 
 body.login-pf {
   margin: 0;
+  padding: 0;
+  height: 100%;
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Three stacked layers (first = on top): logo, watermark texture, gradient.
-     This whole stack only shows in the area LEFT of the form panel on
-     tablet/desktop — on phone the panel covers 100% so none of it shows. */
-  background-image:
-    url("../img/logo-white.svg"),
-    url("../img/watermark.svg"),
-    linear-gradient(135deg, #4a47c7, #2f2c8f);
-  background-repeat: no-repeat, no-repeat, no-repeat;
-  background-position: 48px 48px, -60px bottom, 0 0;
-  background-size: 200px, 520px, cover;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--oh-text);
+  background: linear-gradient(170deg, #5046e5 0%, #2d2a8e 55%, #18156a 100%) !important;
 }
 
-body.login-pf::before {
-  background-image: none !important;
-}
-
-/* ---------- The form panel (kcLoginClass = .login-pf-page) ---------- */
-/* Mobile (default): full width, normal flow, no fixed panel. */
-.login-pf-page {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 100vh;
-  margin: 0;
-  padding: 32px 24px;
-  background: #ffffff;
-  box-sizing: border-box;
-}
-
-/* Tablet: right HALF of the screen */
+/* -----------------------------------------------------------------------
+   Watermark hub mark — bottom-left of the brand area.
+   Uses html::after (same technique as html::before for the logo).
+   Only visible on tablet+ where the panel doesn't cover the full screen.
+   ----------------------------------------------------------------------- */
 @media (min-width: 640px) {
-  .login-pf-page {
+  html::after {
+    display: block;
+    content: "";
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 50%;
-    min-height: 100vh;
-    height: 100vh;
-    overflow-y: auto;
-    box-shadow: -8px 0 32px rgba(15, 23, 42, 0.12);
-    padding: 48px;
+    bottom: 20px;
+    left: 20px;
+    /* Cap the size to a share of the viewport so the watermark never
+       reaches under the fixed right-hand form panel (which starts as
+       close as 50vw between the 640px and 1024px breakpoints) and gets
+       visually clipped by it. */
+    width: min(380px, 40vw);
+    height: min(380px, 40vw);
+    background-image: url("../img/watermark.svg");
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-color: transparent;
+    z-index: 0;
+    pointer-events: none;
   }
 }
 
-/* Desktop: right THIRD of the screen */
+/* -----------------------------------------------------------------------
+   Logo in the LEFT brand area.
+   Using html::before instead of body::before — Keycloak's templates
+   sometimes stack elements that cover body pseudo-elements.
+   Uses a PNG (not SVG) because SVG <text> doesn't render as background-image.
+   Only visible on tablet+ where the form panel doesn't cover the full screen.
+   ----------------------------------------------------------------------- */
+html::before {
+  display: none !important;
+  content: none !important;
+}
+
+@media (min-width: 640px) {
+  html::before {
+    display: block !important;
+    content: "" !important;
+    position: fixed !important;
+    top: 52px !important;
+    left: 52px !important;
+    width: 220px !important;
+    height: 55px !important;
+    background-image: url("../img/logo-white.png") !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+    background-position: left center !important;
+    background-color: transparent !important;
+    z-index: 9999 !important;
+    pointer-events: none !important;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   Right-anchored form panel
+   ----------------------------------------------------------------------- */
+.login-pf-page {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: stretch !important;
+  min-height: 100vh !important;
+  margin: 0 !important;
+  padding: 40px 28px !important;
+  background: #ffffff !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+@media (min-width: 640px) {
+  .login-pf-page {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    width: 50% !important;
+    height: 100vh !important;
+    overflow-y: auto !important;
+    padding: 72px 64px !important;
+    box-shadow: -8px 0 48px rgba(15, 23, 42, 0.22) !important;
+  }
+}
+
 @media (min-width: 1024px) {
   .login-pf-page {
-    width: 33.3333%;
-    min-width: 380px;
-    max-width: 560px;
+    width: 36% !important;
+    min-width: 420px !important;
+    max-width: 600px !important;
   }
 }
 
-/* Swap the realm display name text for the OpenHub logo image */
+/* -----------------------------------------------------------------------
+   Card wrapper — transparent, let the panel be the visual container
+   ----------------------------------------------------------------------- */
+.card-pf,
+.pf-c-card,
+.login-pf-page > div {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+/* -----------------------------------------------------------------------
+   Logo in the form panel header
+   ----------------------------------------------------------------------- */
+#kc-header,
 #kc-header-wrapper {
-  background-image: url("../img/logo-light.svg");
-  background-repeat: no-repeat;
-  background-position: left center;
-  background-size: contain;
-  height: 36px;
-  width: 180px;
-  margin: 0 auto 2rem;
-  color: transparent;
-  font-size: 0;
-  overflow: hidden;
+  background-image: url("../img/logo-light.svg") !important;
+  background-repeat: no-repeat !important;
+  background-position: left center !important;
+  background-size: contain !important;
+  height: 40px !important;
+  max-width: 180px !important;
+  margin-bottom: 2.5rem !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  text-indent: -9999px !important;
+  overflow: hidden !important;
+  display: block !important;
 }
 
-@media (min-width: 640px) {
-  #kc-header-wrapper {
-    margin: 0 0 2.5rem;
-  }
+/* -----------------------------------------------------------------------
+   Page title
+   ----------------------------------------------------------------------- */
+#kc-page-title,
+h1,
+h1.pf-c-title,
+.kc-page-title {
+  color: #14171f !important;
+  font-size: 1.65rem !important;
+  font-weight: 700 !important;
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif !important;
+  margin: 0 0 1.75rem !important;
+  line-height: 1.2 !important;
 }
 
-.login-pf-page .card-pf {
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
-  border: 1px solid #e2e8f0;
-  padding: 2rem;
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
+/* -----------------------------------------------------------------------
+   Form structure — PatternFly 4 AND Bootstrap class names + elements
+   ----------------------------------------------------------------------- */
+.form-group,
+.pf-c-form__group {
+  margin-bottom: 1.25rem !important;
 }
 
-@media (min-width: 640px) {
-  .login-pf-page .card-pf {
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    margin: 0;
-    max-width: none;
-  }
-}
-
-#kc-page-title {
-  color: #14171f;
-  font-weight: 600;
-  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
-}
-
+/* Labels */
 label,
-.control-label {
-  color: #334155;
-  font-weight: 500;
+.control-label,
+.pf-c-form__label,
+.pf-c-form__label-text {
+  display: block !important;
+  margin-bottom: 0.4rem !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+  color: #475569 !important;
 }
 
-.form-control {
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
+/* Input fields — target every possible class name + bare elements */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="number"],
+.form-control,
+.pf-c-form-control,
+.pf-c-form__control {
+  display: block !important;
+  width: 100% !important;
+  padding: 0.7rem 1rem !important;
+  font-size: 0.95rem !important;
+  font-family: inherit !important;
+  color: #14171f !important;
+  background: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  outline: none !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
 }
 
-.form-control:focus {
-  border-color: #4a47c7;
-  box-shadow: 0 0 0 3px rgba(74, 71, 199, 0.15);
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+.form-control:focus,
+.pf-c-form-control:focus,
+.pf-c-form__control:focus {
+  border-color: #4a47c7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(74, 71, 199, 0.15) !important;
 }
 
-.btn-primary {
-  background-color: #4a47c7;
-  border-color: #4a47c7;
-  border-radius: 6px;
-  font-weight: 500;
+/* -----------------------------------------------------------------------
+   Sign In button
+   ----------------------------------------------------------------------- */
+input[type="submit"],
+button[type="submit"],
+.btn-primary,
+.pf-c-button.pf-m-primary,
+#kc-login {
+  display: block !important;
+  width: 100% !important;
+  padding: 0.8rem 1.25rem !important;
+  margin-top: 1.5rem !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  font-family: inherit !important;
+  color: #ffffff !important;
+  background-color: #4a47c7 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 8px rgba(74, 71, 199, 0.35) !important;
+  transition: background-color 0.15s, box-shadow 0.15s !important;
+  text-align: center !important;
+  letter-spacing: 0.01em !important;
 }
 
+input[type="submit"]:hover,
+button[type="submit"]:hover,
 .btn-primary:hover,
-.btn-primary:focus {
-  background-color: #3a37a0;
-  border-color: #3a37a0;
+.pf-c-button.pf-m-primary:hover,
+#kc-login:hover {
+  background-color: #3a37a0 !important;
+  box-shadow: 0 4px 16px rgba(74, 71, 199, 0.4) !important;
 }
 
-#kc-info-wrapper,
-#kc-registration {
-  color: #64748b;
+input[type="submit"]:focus,
+button[type="submit"]:focus,
+.btn-primary:focus,
+#kc-login:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(74, 71, 199, 0.3) !important;
 }
 
-a {
+/* -----------------------------------------------------------------------
+   Links + helper text
+   ----------------------------------------------------------------------- */
+a, a:link, a:visited {
   color: #4a47c7;
+  text-decoration: none;
 }
 
 a:hover {
   color: #3a37a0;
+  text-decoration: underline;
 }
 
-/* ---------- Dark mode (follows OS preference) ---------- */
+#kc-info-wrapper,
+#kc-registration,
+.instruction,
+.pf-c-form__helper-text {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  text-align: center;
+}
+
+/* -----------------------------------------------------------------------
+   Alert / error messages
+   ----------------------------------------------------------------------- */
+.alert, .pf-c-alert {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.alert-error, .pf-m-danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.alert-warning, .pf-m-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+/* -----------------------------------------------------------------------
+   Dark mode (follows OS preference)
+   ----------------------------------------------------------------------- */
 @media (prefers-color-scheme: dark) {
+  html {
+    background: linear-gradient(170deg, #2d2a8e 0%, #18156a 55%, #0a0830 100%) !important;
+  }
+
   body.login-pf {
-    background-image:
-      url("../img/logo-white.svg"),
-      url("../img/watermark.svg"),
-      linear-gradient(135deg, #2f2c8f, #0d1117);
-    background-repeat: no-repeat, no-repeat, no-repeat;
-    background-position: 48px 48px, -60px bottom, 0 0;
-    background-size: 200px, 520px, cover;
+    background: linear-gradient(170deg, #2d2a8e 0%, #18156a 55%, #0a0830 100%) !important;
   }
 
   .login-pf-page {
-    background: #0d1117;
+    background: #0d1117 !important;
   }
 
+  #kc-header,
   #kc-header-wrapper {
-    background-image: url("../img/logo-dark.svg");
+    background-image: url("../img/logo-dark.svg") !important;
   }
 
-  #kc-page-title {
-    color: #e6edf3;
+  #kc-page-title, h1, h1.pf-c-title {
+    color: #e6edf3 !important;
   }
 
-  .login-pf-page .card-pf {
-    background-color: #161b22;
-    border-color: #30363d;
-    color: #e6edf3;
+  label, .control-label,
+  .pf-c-form__label, .pf-c-form__label-text {
+    color: #94a3b8 !important;
   }
 
-  @media (min-width: 640px) {
-    .login-pf-page .card-pf {
-      background-color: transparent;
-    }
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  .form-control,
+  .pf-c-form-control {
+    background: #161b22 !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
   }
 
-  label,
-  .control-label {
-    color: #c9d1d9;
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  .form-control:focus,
+  .pf-c-form-control:focus {
+    border-color: #8b85f5 !important;
+    background: #1c2230 !important;
+    box-shadow: 0 0 0 3px rgba(139, 133, 245, 0.2) !important;
   }
 
-  .form-control {
-    background-color: #0d1117;
-    border-color: #30363d;
-    color: #e6edf3;
-  }
-
-  .form-control::placeholder {
-    color: #6e7681;
-  }
-
-  #kc-info-wrapper,
-  #kc-registration,
-  #kc-registration a {
+  #kc-info-wrapper, #kc-registration, .instruction {
     color: #8b949e;
   }
 
-  a {
-    color: #8b85f5;
-  }
-
-  a:hover {
-    color: #a39dfa;
-  }
+  a, a:link, a:visited { color: #8b85f5; }
+  a:hover { color: #a39dfa; }
 }

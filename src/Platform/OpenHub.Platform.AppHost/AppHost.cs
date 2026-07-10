@@ -249,6 +249,14 @@ var adminUiRemote = builder.AddJavaScriptApp("admin-ui-remote", "../../Administr
 // vite.config.ts's federation `remotes` config.
 var crmUiRemote = builder.AddJavaScriptApp("crm-ui-remote", "../../CRM/OpenHub.CRM.UI", "dev");
 
+// Same reasoning as adminUiRemote/crmUiRemote above — genuine Module Federation remote
+// (Rspack), not wired via .WithReference()/service discovery; the shell finds it by the
+// hardcoded dev URL in vite.config.ts's federation `remotes` config. Used to be a local
+// folder inside the shell (src/Shell/OpenHub.UI/src/modules/product) built straight into
+// its bundle; spliced off into its own independently buildable/deployable remote the same
+// way Administration and CRM were.
+var productManagerUiRemote = builder.AddJavaScriptApp("product-manager-ui-remote", "../../ProductManager/OpenHub.ProductManager.UI", "dev");
+
 var productManagerApi = builder.AddProject<Projects.OpenHub_ProductManager_Api>("product-manager-api")
     .WithHttpEndpoint(port: 5200)
     .WithHttpHealthCheck("/health")

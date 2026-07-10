@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pencil, Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { DataTable } from "../../../components/DataTable";
-import { productManagerApi } from "../../../services/productManagerApi";
+import { DataTable } from "../components/DataTable";
+import { useProductRuntime } from "../context/ProductRuntimeContext";
 import type { LookupsResponse, Product } from "../types";
-import { useAuth } from "../../../auth/AuthProvider";
 
 const PAGE_SIZE = 25;
 
@@ -34,7 +33,7 @@ function FilterSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 
 export default function ProductList() {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { hasRole, api } = useProductRuntime();
   const canManage = hasRole("product-manager");
 
   const [lookups, setLookups] = useState<LookupsResponse | null>(null);
@@ -53,12 +52,12 @@ export default function ProductList() {
   const [publishedFilter, setPublishedFilter] = useState<"" | "true" | "false">("");
 
   useEffect(() => {
-    productManagerApi.getLookups().then(setLookups);
-  }, []);
+    api.getLookups().then(setLookups);
+  }, [api]);
 
   useEffect(() => {
     setLoading(true);
-    productManagerApi
+    api
       .getProducts({
         page: pageIndex + 1,
         pageSize: PAGE_SIZE,
@@ -76,7 +75,7 @@ export default function ProductList() {
       })
       .catch(() => setError("Failed to load products."))
       .finally(() => setLoading(false));
-  }, [pageIndex, search, manufacturerId, brandId, conditionTypeId, availabilityStatusId, activeFilter, publishedFilter]);
+  }, [api, pageIndex, search, manufacturerId, brandId, conditionTypeId, availabilityStatusId, activeFilter, publishedFilter]);
 
   // Reset to page 1 whenever a filter or the search term changes
   useEffect(() => {
@@ -134,7 +133,7 @@ export default function ProductList() {
       enableSorting: false,
       cell: ({ row }) => (
         <button
-          onClick={() => navigate(`/product/catalog/${row.original.id}/edit`)}
+          onClick={() => navigate(`/catalog/${row.original.id}/edit`)}
           className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
           title="Edit product"
         >
@@ -194,7 +193,7 @@ export default function ProductList() {
 
         {canManage && (
           <button
-            onClick={() => navigate("/product/catalog/new")}
+            onClick={() => navigate("/catalog/new")}
             className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90"
           >
             <Plus size={16} />
