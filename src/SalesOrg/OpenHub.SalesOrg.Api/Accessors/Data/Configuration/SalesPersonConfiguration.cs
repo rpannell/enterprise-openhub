@@ -13,6 +13,7 @@ public class SalesPersonConfiguration : IEntityTypeConfiguration<SalesPersonEnti
 
         builder.Property(s => s.Id).HasColumnName("id");
         builder.Property(s => s.TenantId).HasColumnName("tenant_id");
+        builder.Property(s => s.UniqueId).HasColumnName("unique_id");
         builder.Property(s => s.FirstName).HasColumnName("first_name").IsRequired();
         builder.Property(s => s.LastName).HasColumnName("last_name").IsRequired();
         builder.Property(s => s.Email).HasColumnName("email").IsRequired();

@@ -6,6 +6,13 @@ namespace OpenHub.SalesOrg.Api.Managers.Interfaces;
 public interface ISalesPersonManager
 {
     Task<IReadOnlyList<SalesPersonDto>> GetAllAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Keycloak users in the caller's realm who aren't already linked to a sales person —
+    /// backs the "new sales person" picker, which only ever links an existing Keycloak identity
+    /// rather than typing name/email freehand.
+    /// </summary>
+    Task<IReadOnlyList<AvailableKeycloakUserDto>> GetAvailableKeycloakUsersAsync(CancellationToken ct = default);
     Task<SalesPersonDto?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<SalesPersonDto> CreateAsync(CreateSalesPersonRequest request, Guid createUserId, CancellationToken ct = default);
     Task<SalesPersonDto?> UpdateAsync(Guid id, UpdateSalesPersonRequest request, Guid modifyUserId, CancellationToken ct = default);

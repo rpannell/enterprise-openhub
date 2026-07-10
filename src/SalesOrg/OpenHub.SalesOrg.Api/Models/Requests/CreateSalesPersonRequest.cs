@@ -4,6 +4,9 @@ namespace OpenHub.SalesOrg.Api.Models.Requests;
 
 public class CreateSalesPersonRequest
 {
+    [Description("Keycloak user id (sub claim) of the identity this sales person is linked to. Required — sales people must already exist as a Keycloak user so they can log in.")]
+    public string UniqueId { get; set; } = null!;
+
     [Description("First name. Required.")]
     public string FirstName { get; set; } = null!;
 

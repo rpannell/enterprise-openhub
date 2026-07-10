@@ -7,6 +7,9 @@ public class SalesPersonResponse
     [Description("Unique sales person identifier.")]
     public Guid Id { get; set; }
 
+    [Description("Keycloak user id (sub claim) this sales person is linked to, if any.")]
+    public string? UniqueId { get; set; }
+
     [Description("First name.")]
     public string FirstName { get; set; } = null!;
 

@@ -22,6 +22,8 @@ public partial class SalesRoleMapper
     [MapperIgnoreTarget(nameof(SalesRoleDto.ActiveStatus))]
     [MapperIgnoreTarget(nameof(SalesRoleDto.CreatedAt))]
     [MapperIgnoreTarget(nameof(SalesRoleDto.UpdatedAt))]
+    // HierarchyLevel isn't client-supplied — the manager derives it from ParentRoleId.
+    [MapperIgnoreTarget(nameof(SalesRoleDto.HierarchyLevel))]
     public partial SalesRoleDto ToDto(CreateSalesRoleRequest request);
 
     // Manager -> Controller

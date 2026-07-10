@@ -15,6 +15,7 @@ public class SalesRoleConfiguration : IEntityTypeConfiguration<SalesRoleEntity>
         builder.Property(r => r.TenantId).HasColumnName("tenant_id");
         builder.Property(r => r.Name).HasColumnName("name").IsRequired();
         builder.Property(r => r.Description).HasColumnName("description");
+        builder.Property(r => r.ParentRoleId).HasColumnName("parent_role_id");
         builder.Property(r => r.HierarchyLevel).HasColumnName("hierarchy_level");
         builder.Property(r => r.ActiveStatus).HasColumnName("active_status");
         builder.Property(r => r.CreatedAt).HasColumnName("created_at");
