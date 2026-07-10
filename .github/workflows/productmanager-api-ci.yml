@@ -1,0 +1,73 @@
+name: ProductManager API CI
+
+# Scoped to just OpenHub.ProductManager.Api and the shared libraries it actually depends on
+# (see that project's <ProjectReference> list) — not the whole solution. This is the first of
+# a per-project CI workflow set; the same pattern (path-filtered trigger, restore/build/test on
+# just that project's own .csproj + its test project) will be repeated for the other APIs and
+# background workers (ProductManager's ElasticProcessor/IdentityEventProcessor/ReindexJob, CRM,
+# SalesOrg, Administration, ...) as they're added.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/ProductManager/OpenHub.ProductManager.Api/**"
+      - "src/ProductManager/OpenHub.ProductManager.Contracts/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "src/Accessor/OpenHub.Accessor.RabbitMq/**"
+      - "tests/ProductManager/OpenHub.ProductManager.Api.Tests/**"
+      - ".github/workflows/productmanager-api-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/ProductManager/OpenHub.ProductManager.Api/**"
+      - "src/ProductManager/OpenHub.ProductManager.Contracts/**"
+      - "src/Platform/OpenHub.Platform.ServiceDefaults/**"
+      - "src/Accessor/OpenHub.Accessor.KeyCloak/**"
+      - "src/Accessor/OpenHub.Accessor.RabbitMq/**"
+      - "tests/ProductManager/OpenHub.ProductManager.Api.Tests/**"
+      - ".github/workflows/productmanager-api-ci.yml"
+
+# Cancel a stale run on the same PR/branch when new commits land, rather than letting both finish.
+concurrency:
+  group: productmanager-api-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore src/ProductManager/OpenHub.ProductManager.Api/OpenHub.ProductManager.Api.csproj
+
+      - name: Build
+        run: dotnet build src/ProductManager/OpenHub.ProductManager.Api/OpenHub.ProductManager.Api.csproj --configuration Release --no-restore
+
+      - name: Restore tests
+        run: dotnet restore tests/ProductManager/OpenHub.ProductManager.Api.Tests/OpenHub.ProductManager.Api.Tests.csproj
+
+      - name: Build tests
+        run: dotnet build tests/ProductManager/OpenHub.ProductManager.Api.Tests/OpenHub.ProductManager.Api.Tests.csproj --configuration Release --no-restore
+
+      # Unit tests only — the Integration-tagged tests need real Postgres/RabbitMQ/Elasticsearch
+      # instances (see PostgresCollectionFixture etc.) that this workflow doesn't stand up yet.
+      # Follow-up: add service containers and drop this filter once that's wired up.
+      - name: Run unit tests
+        run: >
+          dotnet test tests/ProductManager/OpenHub.ProductManager.Api.Tests/OpenHub.ProductManager.Api.Tests.csproj
+          --configuration Release --no-build
+          --filter "Category!=Integration"
+          --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: productmanager-api-test-results
+          path: tests/ProductManager/OpenHub.ProductManager.Api.Tests/TestResults/test-results.trx
