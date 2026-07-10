@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { CreateLookupModal } from "../../../components/CreateLookupModal";
-import { productManagerApi } from "../../../services/productManagerApi";
+import { CreateLookupModal } from "../components/CreateLookupModal";
+import { useProductRuntime } from "../context/ProductRuntimeContext";
 import type {
   LookupsResponse,
   LookupItem,
@@ -174,6 +174,7 @@ interface ProductFormProps {
 }
 
 export function ProductForm({ lookups, product, onSubmit, onCancel }: ProductFormProps) {
+  const { api } = useProductRuntime();
   const isEdit = product !== undefined;
 
   // Form state
@@ -367,7 +368,7 @@ export function ProductForm({ lookups, product, onSubmit, onCancel }: ProductFor
           addNewTitle="Add Manufacturer"
           fieldError={fieldErrors.manufacturer}
           onAddNew={async (newName) => {
-            const created = await productManagerApi.createManufacturer(newName);
+            const created = await api.createManufacturer(newName);
             setManufacturers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
             setManufacturer(created.name);
           }}
@@ -385,7 +386,7 @@ export function ProductForm({ lookups, product, onSubmit, onCancel }: ProductFor
           addNewTitle="Add Brand"
           fieldError={fieldErrors.brand}
           onAddNew={async (newName) => {
-            const created = await productManagerApi.createBrand(newName);
+            const created = await api.createBrand(newName);
             setBrands((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
             setBrand(created.name);
           }}

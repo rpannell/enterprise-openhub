@@ -35,6 +35,17 @@ export default defineConfig({
           entryGlobalName: "crmRemote",
           shareScope: "default",
         },
+        productRemote: {
+          type: "module",
+          name: "productRemote",
+          // Same build-time-resolution pattern as adminRemote/crmRemote above. Must
+          // match OpenHub.ProductManager.UI's own `PUBLIC_PATH` build arg plus
+          // "remoteEntry.js". Passed as `docker build --build-arg
+          // PRODUCT_REMOTE_URL=...` here.
+          entry: process.env.PRODUCT_REMOTE_URL ?? "http://localhost:5177/remoteEntry.js",
+          entryGlobalName: "productRemote",
+          shareScope: "default",
+        },
       },
       // NOT react-router-dom — see docs/module-federation.md "The router-sharing
       // deadlock". Sharing it as a singleton forced the MF runtime to eagerly

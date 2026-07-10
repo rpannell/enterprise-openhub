@@ -18,9 +18,9 @@ export interface ModuleDef {
   // lucide-react icon component — shown on the dashboard tile and sidebar link
   Icon: LucideIcon;
   // Omitted for modules router.tsx wires up specially instead of rendering
-  // flat (product's nested catalog routes; admin's federated remote, which
-  // needs an auth prop this generic slot can't carry — see AdminRemoteMount
-  // in router.tsx).
+  // flat — the federated remotes (admin, crm, product) need an auth prop
+  // this generic slot can't carry, so each gets its own *RemoteMount
+  // wrapper in router.tsx (see AdminRemoteMount there).
   Component?: React.LazyExoticComponent<React.ComponentType>;
 }
 
@@ -55,7 +55,9 @@ export const modules: ModuleDef[] = [
     path: "/product",
     roles: ["product-manager", "warehouse-staff"],
     Icon: Package,
-    Component: lazy(() => import("../modules/product/ProductApp")),
+    // No Component here — this module is a Module Federation remote
+    // (src/ProductManager/OpenHub.ProductManager.UI), loaded via a federated
+    // dynamic import in router.tsx, not a local lazy() import like the others.
   },
   {
     id: "ordering",

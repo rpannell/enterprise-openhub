@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { productManagerApi } from "../../../services/productManagerApi";
+import { useProductRuntime } from "../context/ProductRuntimeContext";
 import { ProductForm } from "./ProductForm";
 import type { LookupsResponse, Product } from "../types";
 
 export default function ProductEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { api } = useProductRuntime();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [lookups, setLookups] = useState<LookupsResponse | null>(null);
@@ -14,16 +15,13 @@ export default function ProductEditPage() {
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([
-      productManagerApi.getProduct(id),
-      productManagerApi.getLookups(),
-    ])
+    Promise.all([api.getProduct(id), api.getLookups()])
       .then(([p, l]) => {
         setProduct(p);
         setLookups(l);
       })
       .catch(() => setError("Failed to load product."));
-  }, [id]);
+  }, [api, id]);
 
   if (error) {
     return (
@@ -54,10 +52,10 @@ export default function ProductEditPage() {
           lookups={lookups}
           product={product}
           onSubmit={async (req) => {
-            await productManagerApi.updateProduct(id!, req as any);
-            navigate("/product/catalog");
+            await api.updateProduct(id!, req as any);
+            navigate("/catalog");
           }}
-          onCancel={() => navigate("/product/catalog")}
+          onCancel={() => navigate("/catalog")}
         />
       </div>
     </div>

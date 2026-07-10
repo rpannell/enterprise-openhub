@@ -1,20 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { productManagerApi } from "../../../services/productManagerApi";
+import { useProductRuntime } from "../context/ProductRuntimeContext";
 import { ProductForm } from "./ProductForm";
 import type { LookupsResponse } from "../types";
 
 export default function ProductCreatePage() {
   const navigate = useNavigate();
+  const { api } = useProductRuntime();
   const [lookups, setLookups] = useState<LookupsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    productManagerApi
+    api
       .getLookups()
       .then(setLookups)
       .catch(() => setError("Failed to load form data."));
-  }, []);
+  }, [api]);
 
   if (error) {
     return (
@@ -42,10 +43,10 @@ export default function ProductCreatePage() {
         <ProductForm
           lookups={lookups}
           onSubmit={async (req) => {
-            await productManagerApi.createProduct(req as any);
-            navigate("/product/catalog");
+            await api.createProduct(req as any);
+            navigate("/catalog");
           }}
-          onCancel={() => navigate("/product/catalog")}
+          onCancel={() => navigate("/catalog")}
         />
       </div>
     </div>

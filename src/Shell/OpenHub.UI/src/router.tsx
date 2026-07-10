@@ -7,10 +7,6 @@ import { RoleGate } from "./auth/RoleGate";
 import { useAuth } from "./auth/AuthProvider";
 import { KEYCLOAK_REALM } from "./keycloak";
 import { modules } from "./config/modules";
-import ProductApp from "./modules/product/ProductApp";
-import ProductList from "./modules/product/catalog/ProductList";
-import ProductCreatePage from "./modules/product/catalog/ProductCreatePage";
-import ProductEditPage from "./modules/product/catalog/ProductEditPage";
 
 // A genuine Module Federation remote — a separately built (Rspack),
 // separately deployable artifact (src/Administration/OpenHub.Administration.UI), not a
@@ -21,6 +17,12 @@ const FederatedAdminApp = lazy(() => import("adminRemote/AdminApp"));
 
 // Same pattern, second federated remote (src/CRM/OpenHub.CRM.UI) — see FederatedAdminApp above.
 const FederatedCrmApp = lazy(() => import("crmRemote/CrmApp"));
+
+// Same pattern, third federated remote (src/ProductManager/OpenHub.ProductManager.UI) —
+// see FederatedAdminApp above. Used to be a local folder (src/modules/product) built
+// straight into this shell bundle; spliced off into its own independently
+// buildable/deployable remote the same way Administration and CRM were.
+const FederatedProductApp = lazy(() => import("productRemote/ProductApp"));
 
 function Loading() {
   return (
@@ -58,6 +60,15 @@ function CrmRemoteMount() {
   return <FederatedCrmApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
 }
 
+/**
+ * Same integration surface as AdminRemoteMount above, for the Product
+ * Management remote.
+ */
+function ProductRemoteMount() {
+  const { roles, getToken } = useAuth();
+  return <FederatedProductApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
+}
+
 const productModule = modules.find((m) => m.id === "product")!;
 const adminModule = modules.find((m) => m.id === "admin")!;
 const crmModule = modules.find((m) => m.id === "crm")!;
@@ -73,20 +84,19 @@ export const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: "account", element: <Account /> },
 
-      // Product module — nested routes for catalog list, create, edit
+      // Product Management module — federated remote, mounted whole, same pattern
+      // as Administration/CRM below. The trailing "/*" hands every sub-path
+      // (catalog, catalog/new, catalog/:id/edit, ...) to the remote's own
+      // <Routes> instead of declaring them here.
       {
-        path: "product",
+        path: "product/*",
         element: (
           <RoleGate roles={productModule.roles} fallback={<Forbidden />}>
-            <ProductApp />
+            <Suspense fallback={<Loading />}>
+              <ProductRemoteMount />
+            </Suspense>
           </RoleGate>
         ),
-        children: [
-          { index: true, element: <Navigate to="catalog" replace /> },
-          { path: "catalog", element: <ProductList /> },
-          { path: "catalog/new", element: <ProductCreatePage /> },
-          { path: "catalog/:id/edit", element: <ProductEditPage /> },
-        ],
       },
 
       // Administration module — federated remote, mounted whole. The
