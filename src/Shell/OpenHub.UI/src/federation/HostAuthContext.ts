@@ -13,4 +13,16 @@ export interface HostAuthContext {
   roles: string[];
   realmSlug: string;
   getToken: () => Promise<string>;
+  /**
+   * Subscribes to real-time messages pushed from the backend over the shell's single SignalR
+   * connection (see OpenHub.UI/src/services/realtimeMessaging.ts). Returns an unsubscribe
+   * function. Connection-only — no visible UI on the shell side; the remote decides how (or
+   * whether) to display anything.
+   */
+  onRealtimeMessage: (listener: (envelope: {
+    messageType: string;
+    payloadJson: string;
+    correlationId: string | null;
+    sentAtUtc: string;
+  }) => void) => () => void;
 }

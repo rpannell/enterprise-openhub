@@ -32,4 +32,16 @@ export interface HostAuthContext {
    * to Keycloak directly.
    */
   getToken: () => Promise<string>;
+
+  /**
+   * Subscribes to real-time messages pushed from the backend over the shell's single SignalR
+   * connection. Returns an unsubscribe function. Connection-only — this remote decides how (or
+   * whether) to display anything received.
+   */
+  onRealtimeMessage: (listener: (envelope: {
+    messageType: string;
+    payloadJson: string;
+    correlationId: string | null;
+    sentAtUtc: string;
+  }) => void) => () => void;
 }

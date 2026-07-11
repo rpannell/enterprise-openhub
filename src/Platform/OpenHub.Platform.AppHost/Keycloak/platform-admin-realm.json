@@ -54,11 +54,40 @@
       ],
       "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email", "product-manager-admin"],
       "optionalClientScopes": ["offline_access", "microprofile-jwt"]
+    },
+    {
+      "clientId": "realtime-messaging-function",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "dev-secret",
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "realtime-messaging-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "realtime-messaging-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ],
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email", "realtime-messaging-publisher"]
     }
   ],
   "clientScopes": [
     {
       "name": "product-manager-admin",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "realtime-messaging-publisher",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true",

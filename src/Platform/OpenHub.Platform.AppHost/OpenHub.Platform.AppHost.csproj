@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\ProductManager\OpenHub.ProductManager.ElasticProcessor\OpenHub.ProductManager.ElasticProcessor.csproj" />
     <ProjectReference Include="..\..\ProductManager\OpenHub.ProductManager.IdentityEventProcessor\OpenHub.ProductManager.IdentityEventProcessor.csproj" />
     <ProjectReference Include="..\..\ProductManager\OpenHub.ProductManager.ReindexJob\OpenHub.ProductManager.ReindexJob.csproj" />
+    <ProjectReference Include="..\..\RealtimeMessaging\OpenHub.RealtimeMessaging.Api\OpenHub.RealtimeMessaging.Api.csproj" />
     <ProjectReference Include="..\..\SalesOrg\OpenHub.SalesOrg.Api\OpenHub.SalesOrg.Api.csproj" />
   </ItemGroup>
 

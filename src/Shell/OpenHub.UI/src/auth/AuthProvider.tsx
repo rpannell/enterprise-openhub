@@ -8,6 +8,11 @@ import {
   type ReactNode,
 } from "react";
 import keycloak from "../keycloak";
+import {
+  createNotificationConnection,
+  type NotificationConnection,
+  type RealtimeMessageListener,
+} from "../services/realtimeMessaging";
 
 interface AuthState {
   initialized: boolean;
@@ -19,6 +24,8 @@ interface AuthState {
   logout: () => void;
   /** Returns a fresh bearer token — the one thing federated remotes get instead of their own Keycloak session. */
   getToken: () => Promise<string>;
+  /** Subscribes to real-time messages pushed from the backend. Returns an unsubscribe function. */
+  onRealtimeMessage: (listener: RealtimeMessageListener) => () => void;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -28,6 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const initStarted = useRef(false);
+  const notificationConnectionRef = useRef<NotificationConnection | null>(null);
+
+  const getToken = async () => {
+    await keycloak.updateToken(30).catch(() => keycloak.login());
+    return keycloak.token!;
+  };
 
   useEffect(() => {
     if (initStarted.current) return;
@@ -59,6 +72,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
+  // Connects once the user is authenticated, disconnects on logout/unmount. Connection-only —
+  // no visible UI here; remotes and Shell pages subscribe via onRealtimeMessage below.
+  useEffect(() => {
+    if (!authenticated) return;
+
+    const hubBaseUrl = import.meta.env.VITE_REALTIME_MESSAGING_URL as string | undefined;
+    if (!hubBaseUrl) {
+      console.warn("VITE_REALTIME_MESSAGING_URL not set — real-time messaging disabled.");
+      return;
+    }
+
+    const connection = createNotificationConnection(`${hubBaseUrl}/hubs/notifications`, getToken);
+    notificationConnectionRef.current = connection;
+    connection.start().catch((err) => console.error("Notification hub connection failed", err));
+
+    return () => {
+      notificationConnectionRef.current = null;
+      connection.stop();
+    };
+  }, [authenticated]);
+
   const value = useMemo<AuthState>(
     () => ({
       initialized,
@@ -69,9 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasAnyRole: (required: string[]) =>
         required.length === 0 || required.some((r) => roles.includes(r)),
       logout: () => keycloak.logout({ redirectUri: window.location.origin }),
-      getToken: async () => {
-        await keycloak.updateToken(30).catch(() => keycloak.login());
-        return keycloak.token!;
+      getToken,
+      onRealtimeMessage: (listener: RealtimeMessageListener) => {
+        if (!notificationConnectionRef.current) return () => {};
+        return notificationConnectionRef.current.subscribe(listener);
       },
     }),
     [initialized, authenticated, roles]
