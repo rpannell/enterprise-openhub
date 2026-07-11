@@ -48,16 +48,24 @@ function Forbidden() {
  * nested routes (organizations/users) — the shell doesn't know they exist.
  */
 function AdminRemoteMount() {
-  const { roles, getToken } = useAuth();
-  return <FederatedAdminApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
+  const { roles, getToken, onRealtimeMessage } = useAuth();
+  return (
+    <FederatedAdminApp
+      auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken, onRealtimeMessage }}
+    />
+  );
 }
 
 /**
  * Same integration surface as AdminRemoteMount above, for the CRM remote.
  */
 function CrmRemoteMount() {
-  const { roles, getToken } = useAuth();
-  return <FederatedCrmApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
+  const { roles, getToken, onRealtimeMessage } = useAuth();
+  return (
+    <FederatedCrmApp
+      auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken, onRealtimeMessage }}
+    />
+  );
 }
 
 /**
@@ -65,8 +73,12 @@ function CrmRemoteMount() {
  * Management remote.
  */
 function ProductRemoteMount() {
-  const { roles, getToken } = useAuth();
-  return <FederatedProductApp auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken }} />;
+  const { roles, getToken, onRealtimeMessage } = useAuth();
+  return (
+    <FederatedProductApp
+      auth={{ roles, realmSlug: KEYCLOAK_REALM, getToken, onRealtimeMessage }}
+    />
+  );
 }
 
 const productModule = modules.find((m) => m.id === "product")!;

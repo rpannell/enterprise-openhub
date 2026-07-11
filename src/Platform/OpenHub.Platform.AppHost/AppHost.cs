@@ -327,6 +327,26 @@ var crmApi = builder.AddProject<Projects.OpenHub_CRM_Api>("crm-api")
     .WaitForCompletion(consulSeed)
     .WaitForCompletion(vaultSeed);
 
+// SignalR hub + M2M-authenticated publish endpoint — pushes real-time messages to logged-in
+// front-end users. No database, but does need the shared Redis instance as SignalR's scale-out
+// backplane (see ApiConst.RedisChannelPrefix in the API project).
+var realtimeMessagingApi = builder.AddProject<Projects.OpenHub_RealtimeMessaging_Api>("realtime-messaging-api")
+    .WithHttpEndpoint(port: 5600)
+    .WithHttpHealthCheck("/health")
+    .WithReference(redis)
+    .WithReference(keycloak)
+    .WithEnvironment("KeyCloak__BaseUrl", keycloak.GetEndpoint("http"))
+    .WithEnvironment("Consul__Url", consul.GetEndpoint("http"))
+    .WithEnvironment("Vault__Address", vault.GetEndpoint("http"))
+    .WithEnvironment("Vault__Token", vaultToken)
+    .WaitFor(keycloak)
+    .WaitForCompletion(consulSeed)
+    .WaitForCompletion(vaultSeed);
+
+// Shell's SignalR client (src/Shell/OpenHub.UI/src/services/realtimeMessaging.ts) needs this to
+// know where to connect — same pattern as VITE_KEYCLOAK_URL above.
+frontend.WithEnvironment("VITE_REALTIME_MESSAGING_URL", realtimeMessagingApi.GetEndpoint("http"));
+
 // Stateless facade over Keycloak's Admin REST API — creates organizations and users.
 // No database/cache/messaging reference: Keycloak is the only infrastructure dependency.
 var administrationApi = builder.AddProject<Projects.OpenHub_Administration_Api>("administration-api")
