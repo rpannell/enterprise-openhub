@@ -10,12 +10,33 @@ namespace OpenHub.Accessor.RealtimeMessaging.Interfaces;
 /// </summary>
 public interface IRealtimeMessagingAccessor
 {
+    /// <summary>Serializes <paramref name="payload"/> with System.Text.Json (camelCase, the
+    /// ASP.NET Core Web defaults) before sending — use this unless you already have a JSON
+    /// string in hand, in which case call the <c>payloadJson</c> overload directly.</summary>
+    Task SendToTenantAsync(
+        string tenantSlug, string messageType, object payload, string accessToken,
+        string? correlationId = null, CancellationToken ct = default);
+
     Task SendToTenantAsync(
         string tenantSlug, string messageType, string payloadJson, string accessToken,
         string? correlationId = null, CancellationToken ct = default);
 
+    /// <summary>Serializes <paramref name="payload"/> with System.Text.Json (camelCase, the
+    /// ASP.NET Core Web defaults) before sending — use this unless you already have a JSON
+    /// string in hand, in which case call the <c>payloadJson</c> overload directly.</summary>
+    Task SendToUserAsync(
+        string tenantSlug, string userId, string messageType, object payload, string accessToken,
+        string? correlationId = null, CancellationToken ct = default);
+
     Task SendToUserAsync(
         string tenantSlug, string userId, string messageType, string payloadJson, string accessToken,
+        string? correlationId = null, CancellationToken ct = default);
+
+    /// <summary>Serializes <paramref name="payload"/> with System.Text.Json (camelCase, the
+    /// ASP.NET Core Web defaults) before sending — use this unless you already have a JSON
+    /// string in hand, in which case call the <c>payloadJson</c> overload directly.</summary>
+    Task SendToAllAsync(
+        string messageType, object payload, string accessToken,
         string? correlationId = null, CancellationToken ct = default);
 
     Task SendToAllAsync(

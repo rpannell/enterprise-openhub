@@ -68,6 +68,22 @@ public class RealtimeMessagingAccessorTests
     }
 
     [Fact]
+    public async Task SendToTenantAsync_ObjectPayload_SerializesAsCamelCaseJson()
+    {
+        var handler = HandlerAccepting();
+        var sut = CreateSut(handler);
+
+        await sut.SendToTenantAsync("client-a", "client.updated", new { ClientId = 42, ClientName = "Acme" }, "fake-token");
+
+        var request = handler.Requests.Single();
+        using var body = JsonDocument.Parse(request.Body!);
+        var payloadJson = body.RootElement.GetProperty("PayloadJson").GetString();
+        using var payload = JsonDocument.Parse(payloadJson!);
+        payload.RootElement.GetProperty("clientId").GetInt32().ShouldBe(42);
+        payload.RootElement.GetProperty("clientName").GetString().ShouldBe("Acme");
+    }
+
+    [Fact]
     public async Task SendToTenantAsync_NonSuccessResponse_Throws()
     {
         var handler = new FakeHttpMessageHandler()
