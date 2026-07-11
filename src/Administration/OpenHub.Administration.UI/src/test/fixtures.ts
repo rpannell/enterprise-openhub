@@ -6,6 +6,7 @@ export function buildHostAuth(overrides: Partial<HostAuthContext> = {}): HostAut
     roles: ["platform-admin", "tenant-admin"],
     realmSlug: "client-a",
     getToken: async () => "test-token",
+    onRealtimeMessage: () => () => {},
     ...overrides,
   };
 }
