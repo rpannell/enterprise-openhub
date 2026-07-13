@@ -13,66 +13,68 @@ public class MessageDispatchManagerTests
 {
     private static readonly CallerContextDto Caller = new("client-a", false);
 
-    [Fact]
-    public async Task DispatchAsync_EngineDenies_DoesNotCallAccessor()
+    private static (MessageDispatchManager Manager, IMessageTargetAuthorizationEngine Engine, INotificationHubAccessor HubAccessor) CreateSut()
     {
         var engine = Substitute.For<IMessageTargetAuthorizationEngine>();
         var hubAccessor = Substitute.For<INotificationHubAccessor>();
-        var denyResult = DispatchAuthorizationResultDto.Deny("no");
-        engine.Authorize(Arg.Any<CallerContextDto>(), Arg.Any<SendMessageDto>()).Returns(denyResult);
-        var manager = new MessageDispatchManager(engine, hubAccessor);
-        var message = new SendMessageDto(MessageTarget.Tenant, "client-b", null, "test", "{}", null);
+        return (new MessageDispatchManager(engine, hubAccessor), engine, hubAccessor);
+    }
 
-        var result = await manager.DispatchAsync(Caller, message);
+    [Fact]
+    public async Task SendToTenantAsync_EngineDenies_DoesNotCallAccessor()
+    {
+        var (manager, engine, hubAccessor) = CreateSut();
+        engine.Authorize(Caller, "client-b").Returns(DispatchAuthorizationResultDto.Deny("no"));
+
+        var result = await manager.SendToTenantAsync(Caller, "client-b", "test", "{}", null);
 
         result.Authorized.ShouldBeFalse();
-        await hubAccessor.DidNotReceiveWithAnyArgs().SendToGroupAsync(default!, default!);
-        await hubAccessor.DidNotReceiveWithAnyArgs().SendToAllAsync(default!);
+        await hubAccessor.DidNotReceiveWithAnyArgs().SendToTenantGroupAsync(default!, default!);
     }
 
     [Fact]
-    public async Task DispatchAsync_TenantTarget_Allowed_SendsToTenantGroup()
+    public async Task SendToTenantAsync_EngineAllows_SendsToTenantGroup()
     {
-        var engine = Substitute.For<IMessageTargetAuthorizationEngine>();
-        var hubAccessor = Substitute.For<INotificationHubAccessor>();
-        engine.Authorize(Arg.Any<CallerContextDto>(), Arg.Any<SendMessageDto>())
-            .Returns(DispatchAuthorizationResultDto.Allow());
-        var manager = new MessageDispatchManager(engine, hubAccessor);
-        var message = new SendMessageDto(MessageTarget.Tenant, "client-a", null, "test", "{}", null);
+        var (manager, engine, hubAccessor) = CreateSut();
+        engine.Authorize(Caller, "client-a").Returns(DispatchAuthorizationResultDto.Allow());
 
-        var result = await manager.DispatchAsync(Caller, message);
+        var result = await manager.SendToTenantAsync(Caller, "client-a", "test", "{}", null);
 
         result.Authorized.ShouldBeTrue();
-        await hubAccessor.Received(1).SendToGroupAsync("tenant:client-a", Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
+        await hubAccessor.Received(1).SendToTenantGroupAsync("client-a", Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task DispatchAsync_UserTarget_Allowed_SendsToUserGroup()
+    public async Task SendToUserAsync_EngineDenies_DoesNotCallAccessor()
     {
-        var engine = Substitute.For<IMessageTargetAuthorizationEngine>();
-        var hubAccessor = Substitute.For<INotificationHubAccessor>();
-        engine.Authorize(Arg.Any<CallerContextDto>(), Arg.Any<SendMessageDto>())
-            .Returns(DispatchAuthorizationResultDto.Allow());
-        var manager = new MessageDispatchManager(engine, hubAccessor);
-        var message = new SendMessageDto(MessageTarget.User, "client-a", "user-1", "test", "{}", null);
+        var (manager, engine, hubAccessor) = CreateSut();
+        engine.Authorize(Caller, "client-b").Returns(DispatchAuthorizationResultDto.Deny("no"));
 
-        await manager.DispatchAsync(Caller, message);
+        var result = await manager.SendToUserAsync(Caller, "client-b", "user-1", "test", "{}", null);
 
-        await hubAccessor.Received(1).SendToGroupAsync("user:client-a:user-1", Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
+        result.Authorized.ShouldBeFalse();
+        await hubAccessor.DidNotReceiveWithAnyArgs().SendToUserAsync(default!, default!, default!);
     }
 
     [Fact]
-    public async Task DispatchAsync_BroadcastTarget_Allowed_SendsToAll()
+    public async Task SendToUserAsync_EngineAllows_SendsToUser()
     {
-        var engine = Substitute.For<IMessageTargetAuthorizationEngine>();
-        var hubAccessor = Substitute.For<INotificationHubAccessor>();
-        engine.Authorize(Arg.Any<CallerContextDto>(), Arg.Any<SendMessageDto>())
-            .Returns(DispatchAuthorizationResultDto.Allow());
-        var manager = new MessageDispatchManager(engine, hubAccessor);
-        var message = new SendMessageDto(MessageTarget.Broadcast, null, null, "test", "{}", null);
+        var (manager, engine, hubAccessor) = CreateSut();
+        engine.Authorize(Caller, "client-a").Returns(DispatchAuthorizationResultDto.Allow());
 
-        await manager.DispatchAsync(new CallerContextDto("platform-admin", true), message);
+        await manager.SendToUserAsync(Caller, "client-a", "user-1", "test", "{}", null);
 
+        await hubAccessor.Received(1).SendToUserAsync("client-a", "user-1", Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SendBroadcastAsync_SendsToAll_NoEngineCall()
+    {
+        var (manager, engine, hubAccessor) = CreateSut();
+
+        await manager.SendBroadcastAsync("test", "{}", null);
+
+        engine.DidNotReceiveWithAnyArgs().Authorize(default!, default!);
         await hubAccessor.Received(1).SendToAllAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
     }
 }

@@ -12,13 +12,16 @@ using OpenHub.RealtimeMessaging.Api.Managers.Interfaces;
 namespace OpenHub.RealtimeMessaging.Api.Tests.Integration.Fixtures;
 
 /// <summary>
-/// Stands up the real RealtimeMessaging.Api minimal-API pipeline (routing, versioning,
-/// ValidationFilter, the RealtimeMessagingPublisher authorization policy) via
-/// WebApplicationFactory, while replacing everything that needs a live dependency:
-///   - IMessageDispatchManager → an NSubstitute mock the test configures before calling the
-///     client. Business-rule correctness (own-tenant vs. cross-tenant vs. broadcast) is covered
-///     separately by Unit/Managers/MessageTargetAuthorizationEngineTests — these tests only
-///     exercise HTTP routing, auth-policy enforcement, and validation.
+/// Stands up the real RealtimeMessaging.Api pipeline (NotificationHub, the
+/// RealtimeMessagingBroadcastPublisher authorization policy) via WebApplicationFactory, while
+/// replacing everything that needs a live dependency:
+///   - IMessageDispatchManager (constructor-injected into NotificationHub) → an NSubstitute mock
+///     the test configures before connecting. Business-rule correctness (own-tenant vs.
+///     cross-tenant) is covered separately by Unit/Managers/MessageTargetAuthorizationEngineTests
+///     and Unit/Hubs/NotificationHubTests — these integration tests exist only to exercise the
+///     declarative [Authorize(Policy=...)] on Broadcast, which unit-testing the Hub class
+///     directly cannot cover (that's ASP.NET Core authorization middleware, not Hub-method-body
+///     logic).
 ///   - The real JWT bearer scheme → TestAuthHandler, driven by ClaimsProvider.
 ///   - Every hosted service (SignalR's Redis backplane never actually resolves IHubContext in
 ///     these tests since the Manager is mocked, but this mirrors the defensive pattern used by

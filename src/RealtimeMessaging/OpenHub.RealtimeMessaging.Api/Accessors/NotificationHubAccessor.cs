@@ -10,8 +10,11 @@ namespace OpenHub.RealtimeMessaging.Api.Accessors;
 public class NotificationHubAccessor(IHubContext<NotificationHub, INotificationClient> hubContext)
     : INotificationHubAccessor
 {
-    public Task SendToGroupAsync(string group, MessageEnvelope envelope, CancellationToken ct = default) =>
-        hubContext.Clients.Group(group).ReceiveMessage(envelope);
+    public Task SendToTenantGroupAsync(string tenantSlug, MessageEnvelope envelope, CancellationToken ct = default) =>
+        hubContext.Clients.Group($"tenant:{tenantSlug}").ReceiveMessage(envelope);
+
+    public Task SendToUserAsync(string realmSlug, string userId, MessageEnvelope envelope, CancellationToken ct = default) =>
+        hubContext.Clients.User($"{realmSlug}:{userId}").ReceiveMessage(envelope);
 
     public Task SendToAllAsync(MessageEnvelope envelope, CancellationToken ct = default) =>
         hubContext.Clients.All.ReceiveMessage(envelope);

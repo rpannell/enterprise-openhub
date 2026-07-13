@@ -1,13 +1,10 @@
-using Asp.Versioning;
-using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using OpenHub.RealtimeMessaging.Api;
 using OpenHub.RealtimeMessaging.Api.Accessors.Setup;
-using OpenHub.RealtimeMessaging.Api.Controllers;
 using OpenHub.RealtimeMessaging.Api.Hubs;
 using OpenHub.RealtimeMessaging.Api.Managers.Engines.Setup;
 using OpenHub.RealtimeMessaging.Api.Managers.Setup;
-using OpenHub.RealtimeMessaging.Api.Mappers.Setup;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +39,9 @@ builder.Services.AddSignalR()
         // future collision the same way each API's HybridCache RedisInstanceName prefix does.
         options.Configuration.ChannelPrefix = RedisChannel.Literal(ApiConst.RedisChannelPrefix);
     });
+
+// Backs Clients.User(...) with a "{realmSlug}:{sub}" identifier — see RealmScopedUserIdProvider.
+builder.Services.AddSingleton<IUserIdProvider, RealmScopedUserIdProvider>();
 
 // ── Health checks — infrastructure dependencies ───────────────────────────────
 // Redis health check is registered automatically by the Aspire integration above.
@@ -83,23 +83,13 @@ builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSch
     };
 });
 
-// "RealtimeMessagingPublisher" gates the publish endpoint (MessagesEndpoints.cs) — an M2M token
-// (tenant-realm or platform-admin-realm) carrying a "realtime-messaging-publisher" scope claim.
-// Interactive user tokens never carry this scope, so end users can connect to the hub but can
-// never call the publish endpoint themselves. Same shape as ProductManager.Api's "AdminScope".
+// Gates NotificationHub.Broadcast — the OpenHub-admin path, not a tenant path. Requires only
+// that the caller's issuer is the platform-admin realm, so a human platform-admin user and an
+// M2M platform-admin caller are both admitted identically. SendToTenant/SendToUser have no
+// policy of their own: any authenticated connection may call them, restricted at runtime by
+// MessageTargetAuthorizationEngine's own-realm-or-platform-admin check.
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("RealtimeMessagingPublisher", policy => policy.RequireClaim("scope", "realtime-messaging-publisher"));
-
-// ── API versioning ────────────────────────────────────────────────────────────
-builder.Services.AddApiVersioning(options =>
-{
-    options.DefaultApiVersion = new ApiVersion(1);
-    options.AssumeDefaultVersionWhenUnspecified = true;
-    options.ReportApiVersions = true;
-});
-
-// ── Validation ────────────────────────────────────────────────────────────────
-builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+    .AddPolicy("RealtimeMessagingBroadcastPublisher", policy => policy.RequireAssertion(ctx => ctx.User.IsPlatformAdmin()));
 
 // ── iDesign layer registrations ───────────────────────────────────────────────
 // Each layer owns its own DI setup via a static Add<Layer>() extension method, so the layer
@@ -107,11 +97,9 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddAccessors();
 builder.Services.AddEngines();
 builder.Services.AddManagers();
-builder.Services.AddMappers();
 
 // ── API ───────────────────────────────────────────────────────────────────────
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -120,9 +108,7 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapDefaultEndpoints();
-app.MapOpenHubApiDocs("OpenHub Realtime Messaging API v1");
 app.MapHub<NotificationHub>(ApiConst.HubRoute);
-app.MapMessagesEndpoints();
 
 app.Run();
 

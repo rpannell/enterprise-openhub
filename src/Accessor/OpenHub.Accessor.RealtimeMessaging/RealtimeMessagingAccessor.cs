@@ -1,13 +1,11 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Configuration;
 using OpenHub.Accessor.RealtimeMessaging.Interfaces;
-using OpenHub.Accessor.RealtimeMessaging.Models;
-using OpenHub.RealtimeMessaging.Contracts;
 
 namespace OpenHub.Accessor.RealtimeMessaging;
 
-public class RealtimeMessagingAccessor(HttpClient http) : IRealtimeMessagingAccessor
+public class RealtimeMessagingAccessor(IConfiguration configuration) : IRealtimeMessagingAccessor
 {
     // ASP.NET Core's own Web defaults (camelCase, case-insensitive) — payloads are typically
     // read by TypeScript on the frontend, so this keeps casing consistent with everything else
@@ -24,9 +22,7 @@ public class RealtimeMessagingAccessor(HttpClient http) : IRealtimeMessagingAcce
     public Task SendToTenantAsync(
         string tenantSlug, string messageType, string payloadJson, string accessToken,
         string? correlationId = null, CancellationToken ct = default) =>
-        SendAsync(
-            new SendMessageRequestBody(MessageTarget.Tenant, tenantSlug, null, messageType, payloadJson, correlationId),
-            accessToken, ct);
+        InvokeAsync("SendToTenant", accessToken, ct, tenantSlug, messageType, payloadJson, correlationId);
 
     public Task SendToUserAsync(
         string tenantSlug, string userId, string messageType, object payload, string accessToken,
@@ -38,32 +34,28 @@ public class RealtimeMessagingAccessor(HttpClient http) : IRealtimeMessagingAcce
     public Task SendToUserAsync(
         string tenantSlug, string userId, string messageType, string payloadJson, string accessToken,
         string? correlationId = null, CancellationToken ct = default) =>
-        SendAsync(
-            new SendMessageRequestBody(MessageTarget.User, tenantSlug, userId, messageType, payloadJson, correlationId),
-            accessToken, ct);
+        InvokeAsync("SendToUser", accessToken, ct, tenantSlug, userId, messageType, payloadJson, correlationId);
 
-    public Task SendToAllAsync(
+    public Task BroadcastAsync(
         string messageType, object payload, string accessToken,
         string? correlationId = null, CancellationToken ct = default) =>
-        SendToAllAsync(
+        BroadcastAsync(
             messageType, JsonSerializer.Serialize(payload, PayloadSerializerOptions), accessToken, correlationId, ct);
 
-    public Task SendToAllAsync(
+    public Task BroadcastAsync(
         string messageType, string payloadJson, string accessToken,
         string? correlationId = null, CancellationToken ct = default) =>
-        SendAsync(
-            new SendMessageRequestBody(MessageTarget.Broadcast, null, null, messageType, payloadJson, correlationId),
-            accessToken, ct);
+        InvokeAsync("Broadcast", accessToken, ct, messageType, payloadJson, correlationId);
 
-    private async Task SendAsync(SendMessageRequestBody body, string accessToken, CancellationToken ct)
+    private async Task InvokeAsync(string method, string accessToken, CancellationToken ct, params object?[] args)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/messages")
-        {
-            Content = JsonContent.Create(body)
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var hubUrl = configuration["RealtimeMessagingApi:HubUrl"] ?? "https+http://realtime-messaging-api/hubs/notifications";
 
-        using var response = await http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl(hubUrl, options => options.AccessTokenProvider = () => Task.FromResult<string?>(accessToken))
+            .Build();
+
+        await connection.StartAsync(ct);
+        await connection.InvokeCoreAsync(method, args, ct);
     }
 }

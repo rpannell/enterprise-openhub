@@ -10,29 +10,36 @@ public class MessageDispatchManager(
     IMessageTargetAuthorizationEngine engine,
     INotificationHubAccessor hubAccessor) : IMessageDispatchManager
 {
-    public async Task<DispatchAuthorizationResultDto> DispatchAsync(
-        CallerContextDto caller, SendMessageDto message, CancellationToken ct = default)
+    public async Task<DispatchAuthorizationResultDto> SendToTenantAsync(
+        CallerContextDto caller, string tenantSlug, string messageType, string payloadJson,
+        string? correlationId, CancellationToken ct = default)
     {
-        var authResult = engine.Authorize(caller, message);
-        if (!authResult.Authorized)
-            return authResult;
+        var result = engine.Authorize(caller, tenantSlug);
+        if (!result.Authorized)
+            return result;
 
-        var envelope = new MessageEnvelope(
-            message.MessageType, message.PayloadJson, message.CorrelationId, DateTimeOffset.UtcNow);
+        var envelope = new MessageEnvelope(messageType, payloadJson, correlationId, DateTimeOffset.UtcNow);
+        await hubAccessor.SendToTenantGroupAsync(tenantSlug, envelope, ct);
+        return result;
+    }
 
-        switch (message.Target)
-        {
-            case MessageTarget.User:
-                await hubAccessor.SendToGroupAsync($"user:{message.TenantSlug}:{message.UserId}", envelope, ct);
-                break;
-            case MessageTarget.Tenant:
-                await hubAccessor.SendToGroupAsync($"tenant:{message.TenantSlug}", envelope, ct);
-                break;
-            case MessageTarget.Broadcast:
-                await hubAccessor.SendToAllAsync(envelope, ct);
-                break;
-        }
+    public async Task<DispatchAuthorizationResultDto> SendToUserAsync(
+        CallerContextDto caller, string tenantSlug, string userId, string messageType, string payloadJson,
+        string? correlationId, CancellationToken ct = default)
+    {
+        var result = engine.Authorize(caller, tenantSlug);
+        if (!result.Authorized)
+            return result;
 
-        return authResult;
+        var envelope = new MessageEnvelope(messageType, payloadJson, correlationId, DateTimeOffset.UtcNow);
+        await hubAccessor.SendToUserAsync(tenantSlug, userId, envelope, ct);
+        return result;
+    }
+
+    public async Task SendBroadcastAsync(
+        string messageType, string payloadJson, string? correlationId, CancellationToken ct = default)
+    {
+        var envelope = new MessageEnvelope(messageType, payloadJson, correlationId, DateTimeOffset.UtcNow);
+        await hubAccessor.SendToAllAsync(envelope, ct);
     }
 }
