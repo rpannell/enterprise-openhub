@@ -21,6 +21,14 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.0" />
     <PackageReference Include="Riok.Mapperly" Version="4.0.0" />
+    <!-- Pin transitive dependencies pulled in below their patched versions: NuGet Audit flags
+         MessagePack 2.5.187 (multiple CVEs, via Microsoft.AspNetCore.SignalR.StackExchangeRedis's
+         internal Redis-backplane wire format) and Microsoft.OpenApi 2.0.0 (stack-overflow CVE via
+         circular schema refs, via ASP.NET Core's implicit OpenAPI support). Pinned to the latest
+         patch within the same major version each package's consumer expects, not the next major
+         (MessagePack 3.x / Microsoft.OpenApi 3.x are breaking rewrites). -->
+    <PackageReference Include="MessagePack" Version="2.5.301" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
   </ItemGroup>
 
 </Project>
