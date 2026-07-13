@@ -1,32 +1,27 @@
 using OpenHub.RealtimeMessaging.Api.Managers.Engines.Interfaces;
 using OpenHub.RealtimeMessaging.Api.Managers.Models;
-using OpenHub.RealtimeMessaging.Contracts;
 
 namespace OpenHub.RealtimeMessaging.Api.Managers.Engines;
 
 /// <summary>
-/// Pure authorization rule, no infrastructure dependencies: Broadcast requires a platform-admin
-/// caller; Tenant/User targets require the caller's own realm to match the target realm, unless
-/// the caller is platform-admin (who may target any realm).
+/// Pure authorization rule, no infrastructure dependencies, for the two tenant paths
+/// (SendToTenant/SendToUser): platform-admin callers may target any realm; everyone else may
+/// only target their own realm. Broadcast has no Engine rule — that's gated solely by the
+/// declarative RealtimeMessagingBroadcastPublisher policy on the Hub method.
 /// </summary>
 public class MessageTargetAuthorizationEngine : IMessageTargetAuthorizationEngine
 {
-    public DispatchAuthorizationResultDto Authorize(CallerContextDto caller, SendMessageDto message)
+    public DispatchAuthorizationResultDto Authorize(CallerContextDto caller, string targetRealmSlug)
     {
-        if (message.Target == MessageTarget.Broadcast)
-            return caller.IsPlatformAdmin
-                ? DispatchAuthorizationResultDto.Allow()
-                : DispatchAuthorizationResultDto.Deny("Broadcasting to every tenant requires a platform-admin caller.");
-
         if (caller.IsPlatformAdmin)
             return DispatchAuthorizationResultDto.Allow();
 
         if (string.IsNullOrEmpty(caller.RealmSlug))
             return DispatchAuthorizationResultDto.Deny("Caller has no resolvable realm.");
 
-        return string.Equals(caller.RealmSlug, message.TenantSlug, StringComparison.OrdinalIgnoreCase)
+        return string.Equals(caller.RealmSlug, targetRealmSlug, StringComparison.OrdinalIgnoreCase)
             ? DispatchAuthorizationResultDto.Allow()
             : DispatchAuthorizationResultDto.Deny(
-                $"Tenant-scoped callers may only target their own realm ('{caller.RealmSlug}').");
+                $"Callers may only target their own realm ('{caller.RealmSlug}').");
     }
 }

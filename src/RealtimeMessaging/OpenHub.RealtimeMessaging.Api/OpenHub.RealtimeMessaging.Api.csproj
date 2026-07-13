@@ -6,7 +6,6 @@
     <Nullable>enable</Nullable>
     <AssemblyName>OpenHub.RealtimeMessaging.Api</AssemblyName>
     <RootNamespace>OpenHub.RealtimeMessaging.Api</RootNamespace>
-    <InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,19 +15,13 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="9.3.1" />
-    <PackageReference Include="Asp.Versioning.Http" Version="8.1.0" />
-    <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.0" />
-    <PackageReference Include="Riok.Mapperly" Version="4.0.0" />
-    <!-- Pin transitive dependencies pulled in below their patched versions: NuGet Audit flags
-         MessagePack 2.5.187 (multiple CVEs, via Microsoft.AspNetCore.SignalR.StackExchangeRedis's
-         internal Redis-backplane wire format) and Microsoft.OpenApi 2.0.0 (stack-overflow CVE via
-         circular schema refs, via ASP.NET Core's implicit OpenAPI support). Pinned to the latest
-         patch within the same major version each package's consumer expects, not the next major
-         (MessagePack 3.x / Microsoft.OpenApi 3.x are breaking rewrites). -->
+    <!-- Pin below the version SignalR.StackExchangeRedis pulls in transitively: NuGet Audit flags
+         MessagePack 2.5.187 (multiple CVEs) — MessagePack is SignalR's Redis-backplane wire
+         format, unrelated to the REST/OpenAPI surface this project no longer has. Pinned to the
+         latest patch within the same major version SignalR's MessagePack integration expects,
+         not the breaking MessagePack 3.x rewrite. -->
     <PackageReference Include="MessagePack" Version="2.5.301" />
-    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
   </ItemGroup>
 
 </Project>
