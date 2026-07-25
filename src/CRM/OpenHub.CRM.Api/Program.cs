@@ -9,6 +9,7 @@ using OpenHub.CRM.Api.Controllers;
 using OpenHub.CRM.Api.Managers.Engines.Setup;
 using OpenHub.CRM.Api.Managers.Setup;
 using OpenHub.CRM.Api.Mappers.Setup;
+using OpenHub.CRM.Api.Managers.Options;
 using OpenHub.CRM.Api.Middleware;
 using OpenHub.Accessor.RabbitMq;
 
@@ -43,6 +44,7 @@ builder.Services.AddHybridCache();
 
 // ── Messaging (RabbitMQ durable fanout exchange for client change events) ──
 builder.Services.AddRabbitMqPublisher(builder.Configuration.GetSection("RabbitMq"));
+builder.Services.Configure<ClientEventOptions>(builder.Configuration.GetSection("Events:Client"));
 
 // ── Health checks — infrastructure dependencies ───────────────────────────────
 // DB and Redis health checks are registered automatically by the Aspire integrations above.

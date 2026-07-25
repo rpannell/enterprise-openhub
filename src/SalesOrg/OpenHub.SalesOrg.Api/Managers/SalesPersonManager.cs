@@ -1,11 +1,15 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using OpenHub.Accessor.KeyCloak.Interfaces;
+using OpenHub.Accessor.RabbitMq;
 using OpenHub.SalesOrg.Api.Accessors.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Engines.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Models;
+using OpenHub.SalesOrg.Api.Managers.Options;
 using OpenHub.SalesOrg.Api.Mappers;
 using OpenHub.SalesOrg.Api.Models.Requests;
+using OpenHub.SalesOrg.Contracts;
 
 namespace OpenHub.SalesOrg.Api.Managers;
 
@@ -20,7 +24,9 @@ public class SalesPersonManager(
     SalesAssignmentMapper assignmentMapper,
     SalesRoleMapper roleMapper,
     SalesOrganizationUnitMapper orgUnitMapper,
-    IHttpContextAccessor http) : ISalesPersonManager
+    IHttpContextAccessor http,
+    IMessagePublisher messagePublisher,
+    IOptions<SalesPersonEventOptions> salesPersonEventOptions) : ISalesPersonManager
 {
     private Guid TenantId =>
         http.HttpContext?.Items["TenantId"] as Guid?
@@ -72,6 +78,13 @@ public class SalesPersonManager(
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         var created = await personAccessor.CreateAsync(entity, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesPersonEventOptions.Value, new SalesPersonChangedEvent
+        {
+            SalesPersonId = created.Id,
+            TenantId = TenantId,
+        }, ct);
+
         return personMapper.ToDto(created);
     }
 
@@ -91,6 +104,13 @@ public class SalesPersonManager(
         existing.UpdatedAt = DateTimeOffset.UtcNow;
 
         var updated = await personAccessor.UpdateAsync(existing, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesPersonEventOptions.Value, new SalesPersonChangedEvent
+        {
+            SalesPersonId = updated.Id,
+            TenantId = TenantId,
+        }, ct);
+
         return personMapper.ToDto(updated);
     }
 
@@ -100,6 +120,14 @@ public class SalesPersonManager(
         if (existing is null) return false;
 
         await personAccessor.SoftDeleteAsync(id, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesPersonEventOptions.Value, new SalesPersonChangedEvent
+        {
+            SalesPersonId = id,
+            TenantId = TenantId,
+            IsDeleted = true,
+        }, ct);
+
         return true;
     }
 

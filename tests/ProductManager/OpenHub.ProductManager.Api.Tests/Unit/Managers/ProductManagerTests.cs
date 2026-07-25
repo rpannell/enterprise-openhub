@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
 using Xunit;
@@ -7,6 +8,7 @@ using OpenHub.ProductManager.Api.Accessors.Interfaces;
 using OpenHub.ProductManager.Api.Accessors.Models;
 using OpenHub.ProductManager.Api.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Models;
+using OpenHub.ProductManager.Api.Managers.Options;
 using OpenHub.ProductManager.Api.Mappers;
 using OpenHub.ProductManager.Api.Models.Requests;
 using OpenHub.ProductManager.Contracts;
@@ -29,7 +31,7 @@ public class ProductManagerTests
     private readonly Guid _tenantId = Guid.NewGuid();
     private const string RealmSlug = "client-a";
 
-    private OpenHub.ProductManager.Api.Managers.ProductManager CreateManager()
+    private OpenHub.ProductManager.Api.Managers.ProductManager CreateManager(string? exchangeName = "product.changed")
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Items["TenantId"] = _tenantId;
@@ -54,7 +56,8 @@ public class ProductManagerTests
 
         return new OpenHub.ProductManager.Api.Managers.ProductManager(
             _productAccessor, _priceAccessor, _lookupCache, _catalogLookup,
-            _productEngine, _pricingEngine, new ProductMapper(), httpContextAccessor, _messagePublisher);
+            _productEngine, _pricingEngine, new ProductMapper(), httpContextAccessor, _messagePublisher,
+            Options.Create(new ProductEventOptions { ExchangeName = exchangeName }));
     }
 
     private static ProductEntity MakeEntity(Guid? id = null) => new()
@@ -78,7 +81,7 @@ public class ProductManagerTests
 
         await Should.ThrowAsync<KeyNotFoundException>(() => manager.CreateAsync(request, Guid.NewGuid()));
 
-        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ProductChangedEvent>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ProductChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -124,7 +127,7 @@ public class ProductManagerTests
                 e.UserId == userId &&
                 e.RealmSlug == RealmSlug &&
                 e.IsDeleted == false),
-            Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            "product.changed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -136,7 +139,7 @@ public class ProductManagerTests
         var result = await manager.UpdateAsync(Guid.NewGuid(), new UpdateProductRequest(), Guid.NewGuid());
 
         result.ShouldBeNull();
-        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ProductChangedEvent>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ProductChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -155,7 +158,7 @@ public class ProductManagerTests
         result.Name.ShouldBe("New Name");
         await _messagePublisher.Received(1).PublishAsync(
             Arg.Is<ProductChangedEvent>(e => e.ProductId == existing.Id && e.IsDeleted == false && e.UserId == userId),
-            Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            "product.changed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -167,7 +170,7 @@ public class ProductManagerTests
         var result = await manager.DeleteAsync(Guid.NewGuid(), Guid.NewGuid());
 
         result.ShouldBeFalse();
-        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ProductChangedEvent>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ProductChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -184,7 +187,29 @@ public class ProductManagerTests
         await _productAccessor.Received(1).SoftDeleteAsync(existing.Id, userId, Arg.Any<CancellationToken>());
         await _messagePublisher.Received(1).PublishAsync(
             Arg.Is<ProductChangedEvent>(e => e.ProductId == existing.Id && e.IsDeleted == true && e.UserId == userId),
-            Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            "product.changed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task CreateAsync_ExchangeNameNotConfigured_DoesNotPublish(string? exchangeName)
+    {
+        var manager = CreateManager(exchangeName);
+        var manufacturerId = Guid.NewGuid();
+        var brandId = Guid.NewGuid();
+        _catalogLookup.GetManufacturersAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<ManufacturerEntity> { new() { Id = manufacturerId, Name = "Acme", TenantId = _tenantId } });
+        _catalogLookup.GetBrandsAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<BrandEntity> { new() { Id = brandId, Name = "AcmeBrand", TenantId = _tenantId } });
+        _productAccessor.CreateAsync(Arg.Any<ProductEntity>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<ProductEntity>());
+        var request = new CreateProductRequest { Sku = "SKU-1", Name = "Widget", Manufacturer = "Acme", Brand = "AcmeBrand" };
+
+        await manager.CreateAsync(request, Guid.NewGuid());
+
+        await _messagePublisher.DidNotReceive().PublishAsync(
+            Arg.Any<ProductChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

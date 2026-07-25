@@ -25,4 +25,7 @@ vault kv put secret/product-manager-function \
 vault kv put secret/crm \
   "RabbitMq:Password=${RABBITMQ_PASSWORD}"
 
+vault kv put secret/salesorg \
+  "RabbitMq:Password=${RABBITMQ_PASSWORD}"
+
 echo "[vault-seed] done."

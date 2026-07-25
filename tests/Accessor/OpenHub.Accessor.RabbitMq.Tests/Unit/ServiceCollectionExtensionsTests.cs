@@ -17,7 +17,7 @@ public class ServiceCollectionExtensionsTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["RabbitMq:HostName"] = "broker.test",
-            ["RabbitMq:ExchangeName"] = "custom.exchange",
+            ["RabbitMq:ChannelPoolSize"] = "20",
         }).Build();
         var services = new ServiceCollection();
         services.AddLogging();
@@ -28,7 +28,7 @@ public class ServiceCollectionExtensionsTests
 
         var options = provider.GetRequiredService<IOptions<RabbitMqPublisherOptions>>().Value;
         options.HostName.ShouldBe("broker.test");
-        options.ExchangeName.ShouldBe("custom.exchange");
+        options.ChannelPoolSize.ShouldBe(20);
 
         var publisher = provider.GetRequiredService<IMessagePublisher>();
         publisher.ShouldBeOfType<RabbitMqMessagePublisher>();
@@ -41,12 +41,12 @@ public class ServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddRabbitMqPublisher(options => options.ExchangeName = "custom.exchange");
+        services.AddRabbitMqPublisher(options => options.ChannelPoolSize = 20);
         await using var provider = services.BuildServiceProvider();
 
         var options = provider.GetRequiredService<IOptions<RabbitMqPublisherOptions>>().Value;
 
-        options.ExchangeName.ShouldBe("custom.exchange");
+        options.ChannelPoolSize.ShouldBe(20);
     }
 
     [Fact]

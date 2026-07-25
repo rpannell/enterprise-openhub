@@ -13,7 +13,7 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
 {
     private static readonly TimeSpan ConsumeTimeout = TimeSpan.FromSeconds(10);
 
-    private RabbitMqPublisherOptions CreateOptions(string exchangeName, Action<RabbitMqPublisherOptions>? configure = null)
+    private RabbitMqPublisherOptions CreateOptions(Action<RabbitMqPublisherOptions>? configure = null)
     {
         var options = new RabbitMqPublisherOptions
         {
@@ -21,7 +21,6 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
             Port = fixture.Port,
             UserName = fixture.UserName,
             Password = fixture.Password,
-            ExchangeName = exchangeName,
             ChannelPoolSize = 3,
         };
         configure?.Invoke(options);
@@ -52,14 +51,16 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     private static string UniqueExchange() => $"test.exchange.{Guid.NewGuid():N}";
 
     [Fact]
-    public async Task StartAsync_ConnectsAndDeclaresDurableFanoutExchange()
+    public async Task PublishAsync_FirstPublishToExchange_DeclaresDurableFanoutExchange()
     {
         var exchange = UniqueExchange();
-        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange));
+        await using var publisher = await CreateStartedPublisherAsync(CreateOptions());
+
+        await publisher.PublishAsync(new { Value = 1 }, exchange);
 
         // RabbitMQ no-ops on an identical re-declare (same type/durability) and
         // throws on a mismatch — this indirectly proves the publisher declared
-        // the exchange as durable fanout.
+        // the exchange as durable fanout on that first publish.
         await using var consumerConnection = await CreateConsumerConnectionAsync();
         await using var verifyChannel = await consumerConnection.CreateChannelAsync();
         await verifyChannel.ExchangeDeclareAsync(exchange, ExchangeType.Fanout, durable: true, autoDelete: false, cancellationToken: CancellationToken.None);
@@ -69,12 +70,12 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task PublishAsync_ValidMessage_MessageArrivesOnBoundQueueWithExpectedBody()
     {
         var exchange = UniqueExchange();
-        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange));
+        await using var publisher = await CreateStartedPublisherAsync(CreateOptions());
         await using var consumerConnection = await CreateConsumerConnectionAsync();
         var (queueName, consumerChannel) = await RabbitMqTestHelpers.DeclareTemporaryBoundQueueAsync(consumerConnection, exchange);
         await using var _ = consumerChannel;
 
-        await publisher.PublishAsync(new { Foo = "bar", Count = 42 });
+        await publisher.PublishAsync(new { Foo = "bar", Count = 42 }, exchange);
 
         var received = await RabbitMqTestHelpers.ConsumeOneAsync(consumerChannel, queueName, ConsumeTimeout);
         using var doc = JsonDocument.Parse(received.Body.ToArray());
@@ -88,12 +89,12 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task PublishAsync_Message_SetsContentTypeApplicationJsonAndPersistentDeliveryMode()
     {
         var exchange = UniqueExchange();
-        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange));
+        await using var publisher = await CreateStartedPublisherAsync(CreateOptions());
         await using var consumerConnection = await CreateConsumerConnectionAsync();
         var (queueName, consumerChannel) = await RabbitMqTestHelpers.DeclareTemporaryBoundQueueAsync(consumerConnection, exchange);
         await using var _ = consumerChannel;
 
-        await publisher.PublishAsync(new { Value = 1 });
+        await publisher.PublishAsync(new { Value = 1 }, exchange);
 
         var received = await RabbitMqTestHelpers.ConsumeOneAsync(consumerChannel, queueName, ConsumeTimeout);
         received.BasicProperties.ContentType.ShouldBe("application/json");
@@ -104,12 +105,12 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task PublishAsync_Message_WithPersistentMessagesFalse_SetsNonPersistentDeliveryMode()
     {
         var exchange = UniqueExchange();
-        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange, o => o.PersistentMessages = false));
+        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(o => o.PersistentMessages = false));
         await using var consumerConnection = await CreateConsumerConnectionAsync();
         var (queueName, consumerChannel) = await RabbitMqTestHelpers.DeclareTemporaryBoundQueueAsync(consumerConnection, exchange);
         await using var _ = consumerChannel;
 
-        await publisher.PublishAsync(new { Value = 1 });
+        await publisher.PublishAsync(new { Value = 1 }, exchange);
 
         var received = await RabbitMqTestHelpers.ConsumeOneAsync(consumerChannel, queueName, ConsumeTimeout);
         received.BasicProperties.Persistent.ShouldBeFalse();
@@ -119,14 +120,14 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task PublishAsync_CustomRoutingKeyPassed_MessageStillArrivesViaFanout()
     {
         var exchange = UniqueExchange();
-        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange));
+        await using var publisher = await CreateStartedPublisherAsync(CreateOptions());
         await using var consumerConnection = await CreateConsumerConnectionAsync();
         var (queueName, consumerChannel) = await RabbitMqTestHelpers.DeclareTemporaryBoundQueueAsync(consumerConnection, exchange);
         await using var _ = consumerChannel;
 
         // Fanout exchanges ignore routing keys entirely — the message should
         // still arrive on every bound queue regardless of what's passed here.
-        await publisher.PublishAsync(new { Value = 1 }, routingKey: "some.ignored.routing.key");
+        await publisher.PublishAsync(new { Value = 1 }, exchange, routingKey: "some.ignored.routing.key");
 
         await RabbitMqTestHelpers.ConsumeOneAsync(consumerChannel, queueName, ConsumeTimeout);
     }
@@ -135,14 +136,14 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task PublishAsync_ConcurrentPublishesExceedingPoolSize_AllSucceedByWaitingForFreeChannel()
     {
         var exchange = UniqueExchange();
-        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange, o => o.ChannelPoolSize = 2));
+        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(o => o.ChannelPoolSize = 2));
         await using var consumerConnection = await CreateConsumerConnectionAsync();
         var (queueName, consumerChannel) = await RabbitMqTestHelpers.DeclareTemporaryBoundQueueAsync(consumerConnection, exchange);
         await using var _ = consumerChannel;
 
         const int messageCount = 10;
         var publishTasks = Enumerable.Range(0, messageCount)
-            .Select(i => publisher.PublishAsync(new { Index = i }))
+            .Select(i => publisher.PublishAsync(new { Index = i }, exchange))
             .ToArray();
         await Task.WhenAll(publishTasks);
 
@@ -160,9 +161,9 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task PublishAsync_ConcurrentPublishesExceedingPoolSize_CompletesWithinReasonableTimeout()
     {
         var exchange = UniqueExchange();
-        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange, o => o.ChannelPoolSize = 2));
+        await using var publisher = await CreateStartedPublisherAsync(CreateOptions(o => o.ChannelPoolSize = 2));
 
-        var burst = Task.WhenAll(Enumerable.Range(0, 20).Select(i => publisher.PublishAsync(new { Index = i })));
+        var burst = Task.WhenAll(Enumerable.Range(0, 20).Select(i => publisher.PublishAsync(new { Index = i }, exchange)));
         var completed = await Task.WhenAny(burst, Task.Delay(TimeSpan.FromSeconds(10)));
 
         completed.ShouldBe(burst);
@@ -172,11 +173,11 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task StopAsync_ClosesChannelsAndConnection_SubsequentPublishThrowsInvalidOperationException()
     {
         var exchange = UniqueExchange();
-        var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange));
+        var publisher = await CreateStartedPublisherAsync(CreateOptions());
 
         await publisher.StopAsync(CancellationToken.None);
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(() => publisher.PublishAsync(new { Value = 1 }));
+        var ex = await Should.ThrowAsync<InvalidOperationException>(() => publisher.PublishAsync(new { Value = 1 }, exchange));
         ex.Message.ShouldContain("has not been started");
     }
 
@@ -184,7 +185,7 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     public async Task StopAsync_CalledWithoutStartAsync_CompletesWithoutThrowing()
     {
         var publisher = new RabbitMqMessagePublisher(
-            Options.Create(CreateOptions(UniqueExchange())),
+            Options.Create(CreateOptions()),
             NullLogger<RabbitMqMessagePublisher>.Instance);
 
         await publisher.StopAsync(CancellationToken.None);
@@ -193,8 +194,7 @@ public class RabbitMqMessagePublisherIntegrationTests(RabbitMqCollectionFixture 
     [Fact]
     public async Task DisposeAsync_AfterStart_ClosesConnectionAndIsIdempotent()
     {
-        var exchange = UniqueExchange();
-        var publisher = await CreateStartedPublisherAsync(CreateOptions(exchange));
+        var publisher = await CreateStartedPublisherAsync(CreateOptions());
 
         await publisher.DisposeAsync();
         await publisher.DisposeAsync();
