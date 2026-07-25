@@ -17,7 +17,10 @@ namespace OpenHub.Accessor.RabbitMq;
 ///    connection at startup. AMQP channels are not thread-safe, so to handle
 ///    a lot of messages at once without callers blocking on each other, each
 ///    publish call rents a channel from the pool, publishes, and returns it.
-///  - The fanout exchange is declared once, durable, on startup.
+///  - Exchanges are declared per name (durable fanout), the first time each
+///    name is published to, then cached — since exchange names are now
+///    supplied per publish call (one per entity, see
+///    <see cref="EntityEventOptions"/>) rather than fixed once at startup.
 ///
 /// Register via <see cref="ServiceCollectionExtensions.AddRabbitMqPublisher"/>,
 /// which wires this up as a singleton <see cref="IMessagePublisher"/> and as
@@ -32,6 +35,7 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
     private IConnection? _connection;
     private ConcurrentQueue<IChannel>? _channelPool;
     private SemaphoreSlim? _poolAvailability;
+    private ConcurrentDictionary<string, byte> _declaredExchanges = new();
     private bool _disposed;
 
     public RabbitMqMessagePublisher(IOptions<RabbitMqPublisherOptions> options, ILogger<RabbitMqMessagePublisher> logger)
@@ -61,18 +65,6 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
         _connection = await factory.CreateConnectionAsync(
             $"{nameof(RabbitMqMessagePublisher)}-connection", cancellationToken);
 
-        // Declare the exchange once, using a short-lived channel just for setup.
-        await using (var setupChannel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken))
-        {
-            await setupChannel.ExchangeDeclareAsync(
-                exchange: _options.ExchangeName,
-                type: ExchangeType.Fanout,
-                durable: _options.DurableExchange,
-                autoDelete: false,
-                arguments: null,
-                cancellationToken: cancellationToken);
-        }
-
         var poolSize = Math.Max(1, _options.ChannelPoolSize);
         var pool = new ConcurrentQueue<IChannel>();
 
@@ -84,10 +76,11 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
 
         _channelPool = pool;
         _poolAvailability = new SemaphoreSlim(poolSize, poolSize);
+        _declaredExchanges = new ConcurrentDictionary<string, byte>();
 
         _logger.LogInformation(
-            "RabbitMqMessagePublisher connected to {HostName}:{Port}, declared durable fanout exchange '{Exchange}' with a pool of {PoolSize} channel(s).",
-            _options.HostName, _options.Port, _options.ExchangeName, poolSize);
+            "RabbitMqMessagePublisher connected to {HostName}:{Port} with a pool of {PoolSize} channel(s).",
+            _options.HostName, _options.Port, poolSize);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -121,12 +114,14 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
         // exception from a closed channel/connection.
         _channelPool = null;
         _poolAvailability = null;
+        _declaredExchanges = new ConcurrentDictionary<string, byte>();
     }
 
     /// <inheritdoc />
-    public async Task PublishAsync<T>(T message, string? routingKey = null, CancellationToken cancellationToken = default)
+    public async Task PublishAsync<T>(T message, string exchangeName, string? routingKey = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
+        ArgumentException.ThrowIfNullOrWhiteSpace(exchangeName);
 
         if (_channelPool is null || _poolAvailability is null)
         {
@@ -151,6 +146,8 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
 
         try
         {
+            await EnsureExchangeDeclaredAsync(channel, exchangeName, cancellationToken);
+
             var properties = new BasicProperties
             {
                 ContentType = "application/json",
@@ -158,8 +155,8 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
             };
 
             await channel.BasicPublishAsync(
-                exchange: _options.ExchangeName,
-                routingKey: routingKey ?? _options.RoutingKey,
+                exchange: exchangeName,
+                routingKey: routingKey ?? string.Empty,
                 mandatory: false,
                 basicProperties: properties,
                 body: body,
@@ -167,7 +164,7 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to publish message to exchange '{Exchange}'.", _options.ExchangeName);
+            _logger.LogError(ex, "Failed to publish message to exchange '{Exchange}'.", exchangeName);
             throw;
         }
         finally
@@ -175,6 +172,31 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher, IHostedService
             _channelPool.Enqueue(channel);
             _poolAvailability.Release();
         }
+    }
+
+    /// <summary>
+    /// Declares <paramref name="exchangeName"/> as a durable fanout exchange the first
+    /// time it's seen, then remembers it so every later publish to the same exchange
+    /// skips the redeclare. RabbitMQ no-ops an identical redeclare (same type/durability)
+    /// anyway, so a rare race between two concurrent first-publishes to a brand-new
+    /// exchange name is harmless.
+    /// </summary>
+    private async Task EnsureExchangeDeclaredAsync(IChannel channel, string exchangeName, CancellationToken cancellationToken)
+    {
+        if (_declaredExchanges.ContainsKey(exchangeName))
+        {
+            return;
+        }
+
+        await channel.ExchangeDeclareAsync(
+            exchange: exchangeName,
+            type: ExchangeType.Fanout,
+            durable: _options.DurableExchange,
+            autoDelete: false,
+            arguments: null,
+            cancellationToken: cancellationToken);
+
+        _declaredExchanges[exchangeName] = 0;
     }
 
     public async ValueTask DisposeAsync()

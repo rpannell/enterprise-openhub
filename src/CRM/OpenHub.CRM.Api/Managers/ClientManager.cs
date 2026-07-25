@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using OpenHub.Accessor.KeyCloak;
 using OpenHub.Accessor.KeyCloak.Interfaces;
 using OpenHub.Accessor.KeyCloak.Models;
@@ -7,6 +8,7 @@ using OpenHub.CRM.Api.Accessors.Interfaces;
 using OpenHub.CRM.Api.Accessors.Models;
 using OpenHub.CRM.Api.Managers.Interfaces;
 using OpenHub.CRM.Api.Managers.Models;
+using OpenHub.CRM.Api.Managers.Options;
 using OpenHub.CRM.Api.Mappers;
 using OpenHub.CRM.Api.Models.Requests;
 using OpenHub.CRM.Contracts;
@@ -20,7 +22,8 @@ public class ClientManager(
     IKeyCloakRealmAccessor keyCloakRealmAccessor,
     ClientMapper mapper,
     IHttpContextAccessor http,
-    IMessagePublisher messagePublisher) : IClientManager
+    IMessagePublisher messagePublisher,
+    IOptions<ClientEventOptions> clientEventOptions) : IClientManager
 {
     private Guid TenantId =>
         http.HttpContext?.Items["TenantId"] as Guid?
@@ -198,14 +201,14 @@ public class ClientManager(
     }
 
     private async Task PublishAsync(Guid clientId, Guid userId, bool isDeleted, CancellationToken ct)
-        => await messagePublisher.PublishAsync(new ClientChangedEvent
+        => await messagePublisher.PublishEntityEventAsync(clientEventOptions.Value, new ClientChangedEvent
         {
             ClientId = clientId,
             TenantId = TenantId,
             UserId = userId,
             RealmSlug = TenantSlug,
             IsDeleted = isDeleted,
-        }, cancellationToken: ct);
+        }, ct);
 
     private static string BuildOrganizationAlias(string name)
     {

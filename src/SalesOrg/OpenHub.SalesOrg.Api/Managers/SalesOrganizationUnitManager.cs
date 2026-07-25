@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
+using OpenHub.Accessor.RabbitMq;
 using OpenHub.SalesOrg.Api.Accessors.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Engines.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Models;
+using OpenHub.SalesOrg.Api.Managers.Options;
 using OpenHub.SalesOrg.Api.Mappers;
 using OpenHub.SalesOrg.Api.Models.Requests;
+using OpenHub.SalesOrg.Contracts;
 
 namespace OpenHub.SalesOrg.Api.Managers;
 
@@ -12,7 +16,9 @@ public class SalesOrganizationUnitManager(
     ISalesOrganizationUnitAccessor accessor,
     ISalesOrgHierarchyEngine hierarchyEngine,
     SalesOrganizationUnitMapper mapper,
-    IHttpContextAccessor http) : ISalesOrganizationUnitManager
+    IHttpContextAccessor http,
+    IMessagePublisher messagePublisher,
+    IOptions<SalesOrganizationUnitEventOptions> salesOrganizationUnitEventOptions) : ISalesOrganizationUnitManager
 {
     private Guid TenantId =>
         http.HttpContext?.Items["TenantId"] as Guid?
@@ -45,6 +51,13 @@ public class SalesOrganizationUnitManager(
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         var created = await accessor.CreateAsync(entity, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesOrganizationUnitEventOptions.Value, new SalesOrganizationUnitChangedEvent
+        {
+            SalesOrganizationUnitId = created.Id,
+            TenantId = TenantId,
+        }, ct);
+
         return mapper.ToDto(created);
     }
 
@@ -78,6 +91,13 @@ public class SalesOrganizationUnitManager(
         existing.UpdatedAt = DateTimeOffset.UtcNow;
 
         var updated = await accessor.UpdateAsync(existing, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesOrganizationUnitEventOptions.Value, new SalesOrganizationUnitChangedEvent
+        {
+            SalesOrganizationUnitId = updated.Id,
+            TenantId = TenantId,
+        }, ct);
+
         return mapper.ToDto(updated);
     }
 
@@ -87,6 +107,14 @@ public class SalesOrganizationUnitManager(
         if (existing is null) return false;
 
         await accessor.SoftDeleteAsync(id, deleteUserId, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesOrganizationUnitEventOptions.Value, new SalesOrganizationUnitChangedEvent
+        {
+            SalesOrganizationUnitId = id,
+            TenantId = TenantId,
+            IsDeleted = true,
+        }, ct);
+
         return true;
     }
 

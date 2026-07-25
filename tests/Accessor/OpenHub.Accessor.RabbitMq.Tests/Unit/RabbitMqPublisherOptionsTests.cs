@@ -16,8 +16,6 @@ public class RabbitMqPublisherOptionsTests
         options.VirtualHost.ShouldBe("/");
         options.UserName.ShouldBe("guest");
         options.Password.ShouldBe("guest");
-        options.ExchangeName.ShouldBe("default.fanout.exchange");
-        options.RoutingKey.ShouldBe(string.Empty);
         options.DurableExchange.ShouldBeTrue();
         options.PersistentMessages.ShouldBeTrue();
         options.ChannelPoolSize.ShouldBe(10);
