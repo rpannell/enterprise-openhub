@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
 using Xunit;
@@ -9,6 +10,7 @@ using OpenHub.Accessor.RabbitMq;
 using OpenHub.CRM.Api.Accessors.Interfaces;
 using OpenHub.CRM.Api.Accessors.Models;
 using OpenHub.CRM.Api.Managers;
+using OpenHub.CRM.Api.Managers.Options;
 using OpenHub.CRM.Api.Mappers;
 using OpenHub.CRM.Api.Models.Requests;
 using OpenHub.CRM.Contracts;
@@ -25,7 +27,7 @@ public class ClientManagerTests
     private readonly Guid _tenantId = Guid.NewGuid();
     private const string RealmSlug = "client-a";
 
-    private ClientManager CreateManager()
+    private ClientManager CreateManager(string? exchangeName = "client.changed")
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Items["TenantId"] = _tenantId;
@@ -40,7 +42,8 @@ public class ClientManagerTests
 
         return new ClientManager(
             _clientAccessor, _salesOrgApiAccessor, _kcOrgAccessor, _kcRealmAccessor,
-            new ClientMapper(), httpContextAccessor, _messagePublisher);
+            new ClientMapper(), httpContextAccessor, _messagePublisher,
+            Options.Create(new ClientEventOptions { ExchangeName = exchangeName }));
     }
 
     private static SalesPersonApiResponse MakeSalesPerson(Guid? id = null) => new()
@@ -84,7 +87,7 @@ public class ClientManagerTests
         await Should.ThrowAsync<KeyNotFoundException>(
             () => manager.CreateAsync(MakeCreateRequest(salesPersonId), Guid.NewGuid()));
 
-        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ClientChangedEvent>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ClientChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -97,6 +100,35 @@ public class ClientManagerTests
 
         await Should.ThrowAsync<InvalidOperationException>(
             () => manager.CreateAsync(MakeCreateRequest(salesPerson.Id), Guid.NewGuid()));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task CreateAsync_ExchangeNameNotConfigured_DoesNotPublish(string? exchangeName)
+    {
+        var manager = CreateManager(exchangeName);
+        var salesPerson = MakeSalesPerson();
+        var createdEntity = MakeClientEntity(salesPersonId: salesPerson.Id);
+
+        _salesOrgApiAccessor.GetSalesPersonByIdAsync(salesPerson.Id, Arg.Any<CancellationToken>()).Returns(salesPerson);
+        _kcRealmAccessor.GetRealmBySlugAsync(RealmSlug, Arg.Any<CancellationToken>())
+            .Returns(new KeyCloakRealmInfo { Id = "realm-1", Realm = RealmSlug, Enabled = true });
+        _kcOrgAccessor.CreateOrganizationAsync(RealmSlug, Arg.Any<CreateKeyCloakOrganizationRequest>(), Arg.Any<CancellationToken>())
+            .Returns("kc-org-123");
+        _clientAccessor.CreateAsync(Arg.Any<ClientEntity>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var e = ci.Arg<ClientEntity>();
+                e.Id = createdEntity.Id;
+                return e;
+            });
+        _clientAccessor.GetByIdAsync(createdEntity.Id, Arg.Any<CancellationToken>()).Returns(createdEntity);
+
+        await manager.CreateAsync(MakeCreateRequest(salesPerson.Id), Guid.NewGuid());
+
+        await _messagePublisher.DidNotReceive().PublishAsync(
+            Arg.Any<ClientChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -133,7 +165,7 @@ public class ClientManagerTests
                 e.UserId == userId &&
                 e.RealmSlug == RealmSlug &&
                 e.IsDeleted == false),
-            Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            "client.changed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -244,7 +276,7 @@ public class ClientManagerTests
         var result = await manager.UpdateAsync(Guid.NewGuid(), new UpdateClientRequest(), Guid.NewGuid());
 
         result.ShouldBeNull();
-        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ClientChangedEvent>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ClientChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -276,7 +308,7 @@ public class ClientManagerTests
         result!.Name.ShouldBe("New Name");
         await _messagePublisher.Received(1).PublishAsync(
             Arg.Is<ClientChangedEvent>(e => e.ClientId == existing.Id && e.IsDeleted == false && e.UserId == userId),
-            Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            "client.changed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -288,7 +320,7 @@ public class ClientManagerTests
         var result = await manager.DeleteAsync(Guid.NewGuid(), Guid.NewGuid());
 
         result.ShouldBeFalse();
-        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ClientChangedEvent>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _messagePublisher.DidNotReceive().PublishAsync(Arg.Any<ClientChangedEvent>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -305,6 +337,6 @@ public class ClientManagerTests
         await _clientAccessor.Received(1).SoftDeleteAsync(existing.Id, userId, Arg.Any<CancellationToken>());
         await _messagePublisher.Received(1).PublishAsync(
             Arg.Is<ClientChangedEvent>(e => e.ClientId == existing.Id && e.IsDeleted == true && e.UserId == userId),
-            Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            "client.changed", Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 }

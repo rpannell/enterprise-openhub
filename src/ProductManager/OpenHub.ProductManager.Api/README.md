@@ -194,6 +194,8 @@ All configuration keys follow `Section:Key` naming (env var: `Section__Key`).
 | `Vault:Address` | env | Vault server URL. Omit to skip Vault secret loading. |
 | `Vault:Token` | env / Vault | Vault authentication token. |
 | `Cors:AllowedOrigins` | Consul / env | Allowed CORS origins (array). Dev fallback allows any origin. |
+| `RabbitMq:HostName`, `RabbitMq:Port`, etc. | env / Consul | RabbitMQ connection settings (see `OpenHub.Accessor.RabbitMq`). |
+| `Events:Product:ExchangeName` | env / Consul | Fanout exchange `ProductChangedEvent` is published to on create/update/delete. Empty or omitted disables publishing for Product. Set to `product.changed` in dev. |
 
 ---
 

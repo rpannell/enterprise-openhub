@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
+using OpenHub.Accessor.RabbitMq;
 using OpenHub.SalesOrg.Api.Accessors.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Models;
+using OpenHub.SalesOrg.Api.Managers.Options;
 using OpenHub.SalesOrg.Api.Mappers;
 using OpenHub.SalesOrg.Api.Models.Requests;
+using OpenHub.SalesOrg.Contracts;
 
 namespace OpenHub.SalesOrg.Api.Managers;
 
@@ -13,7 +17,9 @@ public class SalesAssignmentManager(
     ISalesOrganizationUnitAccessor orgUnitAccessor,
     ISalesRoleAccessor roleAccessor,
     SalesAssignmentMapper mapper,
-    IHttpContextAccessor http) : ISalesAssignmentManager
+    IHttpContextAccessor http,
+    IMessagePublisher messagePublisher,
+    IOptions<SalesAssignmentEventOptions> salesAssignmentEventOptions) : ISalesAssignmentManager
 {
     private Guid TenantId =>
         http.HttpContext?.Items["TenantId"] as Guid?
@@ -53,6 +59,15 @@ public class SalesAssignmentManager(
         // accessor's transaction (see SalesAssignmentAccessor.CreateAsync) — history is preserved
         // by never overwriting a row in place.
         var created = await accessor.CreateAsync(entity, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesAssignmentEventOptions.Value, new SalesAssignmentChangedEvent
+        {
+            SalesAssignmentId = created.Id,
+            TenantId = TenantId,
+            SalesPersonId = created.SalesPersonId,
+            OrganizationUnitId = created.OrganizationUnitId,
+        }, ct);
+
         return await HydrateAsync(mapper.ToDto(created), ct);
     }
 
@@ -68,6 +83,15 @@ public class SalesAssignmentManager(
         existing.UpdatedAt = DateTimeOffset.UtcNow;
 
         var updated = await accessor.UpdateAsync(existing, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesAssignmentEventOptions.Value, new SalesAssignmentChangedEvent
+        {
+            SalesAssignmentId = updated.Id,
+            TenantId = TenantId,
+            SalesPersonId = updated.SalesPersonId,
+            OrganizationUnitId = updated.OrganizationUnitId,
+        }, ct);
+
         return await HydrateAsync(mapper.ToDto(updated), ct);
     }
 
@@ -77,6 +101,16 @@ public class SalesAssignmentManager(
         if (existing is null) return false;
 
         await accessor.SoftDeleteAsync(id, deleteUserId, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesAssignmentEventOptions.Value, new SalesAssignmentChangedEvent
+        {
+            SalesAssignmentId = id,
+            TenantId = TenantId,
+            SalesPersonId = existing.SalesPersonId,
+            OrganizationUnitId = existing.OrganizationUnitId,
+            IsDeleted = true,
+        }, ct);
+
         return true;
     }
 
