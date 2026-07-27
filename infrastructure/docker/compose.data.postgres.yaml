@@ -1,0 +1,88 @@
+name: openhubcrm-postgres
+
+services:
+  # Primary: accepts writes, ships WAL to postgres-2/postgres-3.
+  postgres-1:
+    image: postgres:17
+    container_name: postgres-1
+    hostname: postgres-1
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./postgres/node1:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - enterprise-platform
+
+  # Streaming replica. On first start (empty data dir) it clones postgres-1
+  # via pg_basebackup with -R, which writes standby.signal + primary_conninfo
+  # so it comes up in hot-standby/read-only mode automatically.
+  postgres-2:
+    image: postgres:17
+    container_name: postgres-2
+    hostname: postgres-2
+    restart: unless-stopped
+    environment:
+      PGUSER: replicator
+      PGPASSWORD: replicator
+    volumes:
+      - ./postgres/node2:/var/lib/postgresql/data
+      - ./postgres/replica-entrypoint.sh:/replica-entrypoint.sh
+    entrypoint: ["bash", "/replica-entrypoint.sh"]
+    depends_on:
+      - postgres-1
+    networks:
+      - enterprise-platform
+
+  postgres-3:
+    image: postgres:17
+    container_name: postgres-3
+    hostname: postgres-3
+    restart: unless-stopped
+    environment:
+      PGUSER: replicator
+      PGPASSWORD: replicator
+    volumes:
+      - ./postgres/node3:/var/lib/postgresql/data
+      - ./postgres/replica-entrypoint.sh:/replica-entrypoint.sh
+    entrypoint: ["bash", "/replica-entrypoint.sh"]
+    depends_on:
+      - postgres-1
+    networks:
+      - enterprise-platform
+
+  haproxy:
+    image: haproxy:lts
+    container_name: postgres-haproxy
+    restart: unless-stopped
+    ports:
+      - "5432:5432" # writes -> postgres-1 only
+      - "5433:5433" # reads  -> postgres-2/postgres-3, falls back to postgres-1
+    volumes:
+      - ./postgres/haproxy:/usr/local/etc/haproxy
+    depends_on:
+      - postgres-1
+      - postgres-2
+      - postgres-3
+    networks:
+      - enterprise-platform
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@openhubcrm.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8081:80"
+    volumes:
+      - ./postgres/pgadmin:/var/lib/pgadmin
+    networks:
+      - enterprise-platform
+
+networks:
+  enterprise-platform:
+    external: true

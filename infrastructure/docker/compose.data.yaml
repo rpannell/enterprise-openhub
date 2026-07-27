@@ -1,0 +1,115 @@
+name: openhubcrm-data
+
+services:
+############################################
+# RABBITMQ CLUSTER
+############################################
+  rabbitmq-1:
+    image: rabbitmq:4-management
+    container_name: rabbitmq-1
+    hostname: rabbitmq-1
+    restart: unless-stopped
+    environment:
+      RABBITMQ_ERLANG_COOKIE: openhubcrm-cookie
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - ./rabbitmq/node1:/var/lib/rabbitmq
+    ports:
+      - "15672:15672"
+    networks:
+      - enterprise-platform
+
+  rabbitmq-2:
+    image: rabbitmq:4-management
+    container_name: rabbitmq-2
+    hostname: rabbitmq-2
+    restart: unless-stopped
+    environment:
+      RABBITMQ_ERLANG_COOKIE: openhubcrm-cookie
+    volumes:
+      - ./rabbitmq/node2:/var/lib/rabbitmq
+    networks:
+      - enterprise-platform
+  rabbitmq-3:
+    image: rabbitmq:4-management
+    container_name: rabbitmq-3
+    hostname: rabbitmq-3
+    restart: unless-stopped
+    environment:
+      RABBITMQ_ERLANG_COOKIE: openhubcrm-cookie
+    volumes:
+      - ./rabbitmq/node3:/var/lib/rabbitmq
+    networks:
+      - enterprise-platform
+############################################
+# ELASTICSEARCH CLUSTER
+############################################
+  elastic-1:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.0
+    container_name: elastic-1
+    restart: unless-stopped
+    environment:
+      - node.name=elastic-1
+      - cluster.name=openhubcrm
+      - discovery.seed_hosts=elastic-2,elastic-3
+      - cluster.initial_master_nodes=elastic-1,elastic-2,elastic-3
+      - xpack.security.enabled=false
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
+    volumes:
+      - ./elastic/node1:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - enterprise-platform
+  elastic-2:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.0
+    container_name: elastic-2
+    restart: unless-stopped
+    environment:
+      - node.name=elastic-2
+      - cluster.name=openhubcrm
+      - discovery.seed_hosts=elastic-1,elastic-3
+      - cluster.initial_master_nodes=elastic-1,elastic-2,elastic-3
+      - xpack.security.enabled=false
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
+    volumes:
+      - ./elastic/node2:/usr/share/elasticsearch/data
+    networks:
+      - enterprise-platform
+  elastic-3:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.0
+    container_name: elastic-3
+    restart: unless-stopped
+    environment:
+      - node.name=elastic-3
+      - cluster.name=openhubcrm
+      - discovery.seed_hosts=elastic-1,elastic-2
+      - cluster.initial_master_nodes=elastic-1,elastic-2,elastic-3
+      - xpack.security.enabled=false
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
+    volumes:
+      - ./elastic/node3:/usr/share/elasticsearch/data
+    networks:
+      - enterprise-platform
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.18.0
+    container_name: kibana
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elastic-1:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - enterprise-platform
+
+############################################
+# NETWORK
+############################################
+networks:
+  enterprise-platform:
+    name: enterprise-platform
+    driver: bridge
