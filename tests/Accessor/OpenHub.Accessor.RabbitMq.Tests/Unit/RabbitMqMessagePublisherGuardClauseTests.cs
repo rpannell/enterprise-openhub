@@ -17,7 +17,18 @@ public class RabbitMqMessagePublisherGuardClauseTests
     {
         var sut = CreateSut();
 
-        await Should.ThrowAsync<ArgumentNullException>(() => sut.PublishAsync<string?>(null));
+        await Should.ThrowAsync<ArgumentNullException>(() => sut.PublishAsync<string?>(null, "some.exchange"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task PublishAsync_ExchangeNameNullOrWhitespace_ThrowsArgumentException(string? exchangeName)
+    {
+        var sut = CreateSut();
+
+        await Should.ThrowAsync<ArgumentException>(() => sut.PublishAsync("some message", exchangeName!));
     }
 
     [Fact]
@@ -25,7 +36,7 @@ public class RabbitMqMessagePublisherGuardClauseTests
     {
         var sut = CreateSut();
 
-        var ex = await Should.ThrowAsync<InvalidOperationException>(() => sut.PublishAsync("some message"));
+        var ex = await Should.ThrowAsync<InvalidOperationException>(() => sut.PublishAsync("some message", "some.exchange"));
 
         ex.Message.ShouldContain("AddRabbitMqPublisher");
     }

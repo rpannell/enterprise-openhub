@@ -2,11 +2,13 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using OpenHub.Accessor.KeyCloak.Extensions;
+using OpenHub.Accessor.RabbitMq;
 using OpenHub.SalesOrg.Api;
 using OpenHub.SalesOrg.Api.Accessors.Data;
 using OpenHub.SalesOrg.Api.Accessors.Setup;
 using OpenHub.SalesOrg.Api.Controllers;
 using OpenHub.SalesOrg.Api.Managers.Engines.Setup;
+using OpenHub.SalesOrg.Api.Managers.Options;
 using OpenHub.SalesOrg.Api.Managers.Setup;
 using OpenHub.SalesOrg.Api.Mappers.Setup;
 using OpenHub.SalesOrg.Api.Middleware;
@@ -39,6 +41,13 @@ builder.AddNpgsqlDbContext<SalesOrgDbContext>("SalesOrg");
 builder.AddRedisDistributedCache("Redis");
 builder.Services.Configure<RedisCacheOptions>(options => options.InstanceName = ApiConst.RedisInstanceName);
 builder.Services.AddHybridCache();
+
+// ── Messaging (RabbitMQ durable fanout exchange for sales org change events) ─
+builder.Services.AddRabbitMqPublisher(builder.Configuration.GetSection("RabbitMq"));
+builder.Services.Configure<SalesPersonEventOptions>(builder.Configuration.GetSection("Events:SalesPerson"));
+builder.Services.Configure<SalesOrganizationUnitEventOptions>(builder.Configuration.GetSection("Events:SalesOrganizationUnit"));
+builder.Services.Configure<SalesRoleEventOptions>(builder.Configuration.GetSection("Events:SalesRole"));
+builder.Services.Configure<SalesAssignmentEventOptions>(builder.Configuration.GetSection("Events:SalesAssignment"));
 
 // ── Health checks — infrastructure dependencies ───────────────────────────────
 // DB and Redis health checks are registered automatically by the Aspire integrations above.

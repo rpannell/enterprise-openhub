@@ -1,17 +1,23 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
+using OpenHub.Accessor.RabbitMq;
 using OpenHub.SalesOrg.Api.Accessors.Interfaces;
 using OpenHub.SalesOrg.Api.Accessors.Models;
 using OpenHub.SalesOrg.Api.Managers.Interfaces;
 using OpenHub.SalesOrg.Api.Managers.Models;
+using OpenHub.SalesOrg.Api.Managers.Options;
 using OpenHub.SalesOrg.Api.Mappers;
 using OpenHub.SalesOrg.Api.Models.Requests;
+using OpenHub.SalesOrg.Contracts;
 
 namespace OpenHub.SalesOrg.Api.Managers;
 
 public class SalesRoleManager(
     ISalesRoleAccessor accessor,
     SalesRoleMapper mapper,
-    IHttpContextAccessor http) : ISalesRoleManager
+    IHttpContextAccessor http,
+    IMessagePublisher messagePublisher,
+    IOptions<SalesRoleEventOptions> salesRoleEventOptions) : ISalesRoleManager
 {
     // A role with no parent is the top of its chain. Each step down a parent link drops the
     // derived level by this much — matches the spacing already used by hand-picked levels
@@ -53,6 +59,13 @@ public class SalesRoleManager(
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         var created = await accessor.CreateAsync(entity, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesRoleEventOptions.Value, new SalesRoleChangedEvent
+        {
+            SalesRoleId = created.Id,
+            TenantId = TenantId,
+        }, ct);
+
         return mapper.ToDto(created);
     }
 
@@ -93,6 +106,12 @@ public class SalesRoleManager(
             await RecomputeDescendantLevelsAsync(allRolesAfter, updated, ct);
         }
 
+        await messagePublisher.PublishEntityEventAsync(salesRoleEventOptions.Value, new SalesRoleChangedEvent
+        {
+            SalesRoleId = updated.Id,
+            TenantId = TenantId,
+        }, ct);
+
         return mapper.ToDto(updated);
     }
 
@@ -102,6 +121,14 @@ public class SalesRoleManager(
         if (existing is null) return false;
 
         await accessor.SoftDeleteAsync(id, ct);
+
+        await messagePublisher.PublishEntityEventAsync(salesRoleEventOptions.Value, new SalesRoleChangedEvent
+        {
+            SalesRoleId = id,
+            TenantId = TenantId,
+            IsDeleted = true,
+        }, ct);
+
         return true;
     }
 

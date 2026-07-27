@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using OpenHub.Accessor.RabbitMq;
 using OpenHub.ProductManager.Api.Accessors.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Engines.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Interfaces;
 using OpenHub.ProductManager.Api.Managers.Models;
+using OpenHub.ProductManager.Api.Managers.Options;
 using OpenHub.ProductManager.Api.Mappers;
 using OpenHub.ProductManager.Api.Models.Requests;
 using OpenHub.ProductManager.Contracts;
@@ -19,7 +21,8 @@ public class ProductManager(
     IProductPricingEngine pricingEngine,
     ProductMapper mapper,
     IHttpContextAccessor http,
-    IMessagePublisher messagePublisher) : IProductManager
+    IMessagePublisher messagePublisher,
+    IOptions<ProductEventOptions> productEventOptions) : IProductManager
 {
     private Guid TenantId =>
         http.HttpContext?.Items["TenantId"] as Guid?
@@ -102,7 +105,7 @@ public class ProductManager(
         var entity = mapper.ToEntity(dto);
         var created = await productAccessor.CreateAsync(entity, ct);
 
-        await messagePublisher.PublishAsync(new ProductChangedEvent
+        await messagePublisher.PublishEntityEventAsync(productEventOptions.Value, new ProductChangedEvent
         {
             ProductId = created.Id,
             TenantId = TenantId,
@@ -140,7 +143,7 @@ public class ProductManager(
 
         var updated = await productAccessor.UpdateAsync(existing, ct);
 
-        await messagePublisher.PublishAsync(new ProductChangedEvent
+        await messagePublisher.PublishEntityEventAsync(productEventOptions.Value, new ProductChangedEvent
         {
             ProductId = updated.Id,
             TenantId = TenantId,
@@ -158,7 +161,7 @@ public class ProductManager(
 
         await productAccessor.SoftDeleteAsync(id, deleteUserId, ct);
 
-        await messagePublisher.PublishAsync(new ProductChangedEvent
+        await messagePublisher.PublishEntityEventAsync(productEventOptions.Value, new ProductChangedEvent
         {
             ProductId = id,
             TenantId = TenantId,

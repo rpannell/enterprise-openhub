@@ -20,20 +20,12 @@ public sealed class RabbitMqPublisherOptions
     public string Password { get; set; } = "guest";
 
     /// <summary>
-    /// Name of the fanout exchange that will be declared (durable) on startup
-    /// and used for all publishes.
-    /// </summary>
-    public string ExchangeName { get; set; } = "default.fanout.exchange";
-
-    /// <summary>
-    /// Routing key used on publish. Fanout exchanges ignore the routing key,
-    /// but it is kept here in case the exchange type is ever changed.
-    /// </summary>
-    public string RoutingKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Marks the exchange as durable so it survives a broker restart. Should
-    /// stay true to match "durable fan out (default)" requirement.
+    /// Marks every exchange this publisher declares as durable so it survives
+    /// a broker restart. Should stay true to match "durable fan out (default)"
+    /// requirement. Applies to whichever exchange name is passed to
+    /// <see cref="RabbitMqMessagePublisher.PublishAsync{T}"/> — the exchange
+    /// itself is no longer fixed at startup, since each entity configures its
+    /// own via <see cref="EntityEventOptions"/>.
     /// </summary>
     public bool DurableExchange { get; set; } = true;
 
