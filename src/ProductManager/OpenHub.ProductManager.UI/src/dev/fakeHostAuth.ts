@@ -17,4 +17,6 @@ export const fakeHostAuth: HostAuthContext = {
   roles: ["product-manager", "warehouse-staff"],
   realmSlug: "client-a",
   getToken: async () => DEV_TOKEN,
+  // No real shell connection to subscribe to when running standalone.
+  onRealtimeMessage: () => () => {},
 };

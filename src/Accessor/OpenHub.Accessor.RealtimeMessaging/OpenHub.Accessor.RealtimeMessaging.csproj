@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OpenHub.Accessor.RealtimeMessaging</AssemblyName>
+    <RootNamespace>OpenHub.Accessor.RealtimeMessaging</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- No dependency on OpenHub.RealtimeMessaging.Contracts, OpenHub.Accessor.KeyCloak, or any
+         other accessor — this project only knows how to invoke NotificationHub's methods over
+         SignalR; callers fetch and pass their own access token. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

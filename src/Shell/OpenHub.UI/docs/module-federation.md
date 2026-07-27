@@ -45,8 +45,15 @@ interface HostAuthContext {
   roles: string[];
   realmSlug: string;
   getToken: () => Promise<string>;
+  onRealtimeMessage: (listener: (envelope: RealtimeMessageEnvelope) => void) => () => void;
 }
 ```
+
+`onRealtimeMessage` rides the same "just data and a function, passed as a prop" contract —
+it subscribes to the shell's single SignalR connection (`src/services/realtimeMessaging.ts`)
+to OpenHub.RealtimeMessaging.Api. Same hand-duplication caveat as everything else here: it's a
+second thing riding on the not-yet-built `@openhub/mf-contracts` package (see "What's simplified"
+below).
 
 The shell (`OpenHub.UI`) is the only thing that ever calls `keycloak.init()`. It resolves the
 tenant realm from the hostname (`src/keycloak.ts`), logs the user in, and hands the remote a
