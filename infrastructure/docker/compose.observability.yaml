@@ -1,0 +1,132 @@
+name: openhubcrm-observability
+services:
+
+#################################################
+# OpenTelemetry Collector
+#################################################
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.128.0
+    container_name: otel-collector
+    hostname: otel-collector
+    restart: unless-stopped
+    command:
+      - "--config=/etc/otelcol-contrib/config.yaml"
+    volumes:
+      - ./observability/otel/otel-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      # OTLP gRPC
+      - "4317:4317"
+      # OTLP HTTP
+      - "4318:4318"
+      # Collector metrics
+      - "8888:8888"
+
+    networks:
+      - enterprise-platform
+
+
+#################################################
+# Prometheus
+#################################################
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    command:
+        - "--config.file=/etc/prometheus/prometheus.yml"
+        - "--storage.tsdb.path=/prometheus"
+        - "--storage.tsdb.retention.time=30d"
+        - "--storage.tsdb.retention.size=10GB"
+    volumes:
+      - ./observability/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - ./observability/prometheus/data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - enterprise-platform
+
+
+#################################################
+# Grafana
+#################################################
+
+  grafana:
+    image: grafana/grafana:12.0.0
+    container_name: grafana
+    hostname: grafana
+    restart: unless-stopped
+
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+
+    volumes:
+      - ./observability/grafana/data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      - prometheus
+
+    networks:
+      - enterprise-platform
+
+
+
+#################################################
+# Loki
+#################################################
+
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: loki
+    hostname: loki
+    restart: unless-stopped
+
+    command:
+      - "-config.file=/etc/loki/config.yml"
+    volumes:
+      - ./observability/loki/config.yaml:/etc/loki/config.yml
+      - ./observability/loki/data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - enterprise-platform
+
+
+
+#################################################
+# Tempo
+#################################################
+
+  tempo:
+    image: grafana/tempo:2.8.0
+    container_name: tempo
+    hostname: tempo
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/tempo/tempo.yml"
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yml
+      - ./observability/tempo/data:/tmp/tempo
+
+    ports:
+      - "3200:3200"
+      # OTLP
+      - "4319:4317"
+    networks:
+      - enterprise-platform
+
+
+
+#################################################
+# Network
+#################################################
+
+networks:
+  enterprise-platform:
+    external: true

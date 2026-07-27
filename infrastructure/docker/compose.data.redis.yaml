@@ -1,0 +1,121 @@
+name: openhubcrm-redis
+
+services:
+  redis-1:
+    image: redis:7.4
+    container_name: redis-1
+    restart: unless-stopped
+    command:
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - ./redis/node1:/data
+    ports:
+      - "7001:6379"
+    networks:
+      - enterprise-platform
+
+
+  redis-2:
+    image: redis:7.4
+    container_name: redis-2
+    restart: unless-stopped
+    command:
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - ./redis/node2:/data
+    ports:
+      - "7002:6379"
+    networks:
+      - enterprise-platform
+
+  redis-3:
+    image: redis:7.4
+    container_name: redis-3
+    restart: unless-stopped
+    command:
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - ./redis/node3:/data
+    ports:
+      - "7003:6379"
+    networks:
+      - enterprise-platform
+
+  redis-4:
+    image: redis:7.4
+    container_name: redis-4
+    restart: unless-stopped
+    command:
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - ./redis/node4:/data
+    networks:
+      - enterprise-platform
+
+  redis-5:
+    image: redis:7.4
+    container_name: redis-5
+    restart: unless-stopped
+    command:
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - ./redis/node5:/data
+    networks:
+      - enterprise-platform
+
+  redis-6:
+    image: redis:7.4
+    container_name: redis-6
+    restart: unless-stopped
+    command:
+      redis-server
+      --port 6379
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+    volumes:
+      - ./redis/node6:/data
+    networks:
+      - enterprise-platform
+
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redisinsight
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    volumes:
+      - ./redis/redisinsight:/data
+    networks:
+      - enterprise-platform
+
+networks:
+  enterprise-platform:
+    external: true

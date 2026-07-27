@@ -1,9 +1,9 @@
 namespace OpenHub.SalesOrg.Contracts;
 
 /// <summary>
-/// Not published yet — OpenHub.SalesOrg.EventProcessor is a scaffold with no messaging wired up.
-/// Defined now so downstream consumers (e.g. a future CRM sync) know the intended shape once
-/// SalesAssignment create/move/close starts publishing.
+/// Published by <c>OpenHub.SalesOrg.Api</c>'s <c>SalesAssignmentManager</c> on create/update/delete
+/// — see <c>Events:SalesAssignment:ExchangeName</c>. Empty by default (no exchange configured)
+/// since <c>OpenHub.SalesOrg.EventProcessor</c> is still a scaffold with nothing consuming yet.
 /// </summary>
 public sealed class SalesAssignmentChangedEvent
 {
