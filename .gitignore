@@ -72,3 +72,15 @@ infrastructure/docker/observability/tempo/data/
 .DS_Store
 Thumbs.db
 *.log
+
+# ── Local secrets and credentials (never commit; copy the .example templates) ─
+.env
+infrastructure/.secrets
+infrastructure/k8s/.env
+infrastructure/kubeconfig-act
+infrastructure/k8s/kong/secret.yaml
+infrastructure/k8s/postgres/pgadmin-secret.yaml
+infrastructure/k8s/postgres/secret.yaml
+infrastructure/k8s/reindex-job/secret.yaml
+vault-init.json
+*-init.json

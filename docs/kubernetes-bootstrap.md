@@ -6,6 +6,24 @@ This guide deploys the same core dependencies the application uses (Consul, Vaul
 
 ---
 
+## Local secret files
+
+Real credentials are not stored in the repository. Before applying manifests or running workflows, create your own local copies from the templates (the copies are git-ignored):
+
+```bash
+cp infrastructure/.secrets.example infrastructure/.secrets              # act loads this automatically
+cp infrastructure/k8s/.env.example infrastructure/k8s/.env
+cp infrastructure/k8s/postgres/secret.yaml.example infrastructure/k8s/postgres/secret.yaml
+cp infrastructure/k8s/postgres/pgadmin-secret.yaml.example infrastructure/k8s/postgres/pgadmin-secret.yaml
+cp infrastructure/k8s/kong/secret.yaml.example infrastructure/k8s/kong/secret.yaml
+cp infrastructure/k8s/reindex-job/secret.yaml.example infrastructure/k8s/reindex-job/secret.yaml
+kubectl config view --raw --minify > infrastructure/kubeconfig-act      # used by the act workflows
+```
+
+Open each copied file and replace every `<set-me>` with your own value.
+
+---
+
 ## Quick Start (5 minutes)
 
 ### Prerequisites
